@@ -1,15 +1,13 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 
-// Reemplazá estos valores por los que te da Firebase Console:
-// ⚙️ Configuración del proyecto → Tus apps → ícono web </>
 const firebaseConfig = {
-  apiKey: "TU_API_KEY",
-  authDomain: "TU_PROYECTO.firebaseapp.com",
-  projectId: "TU_PROYECTO",
-  storageBucket: "TU_PROYECTO.appspot.com",
-  messagingSenderId: "TU_SENDER_ID",
-  appId: "TU_APP_ID",
+  apiKey: "AIzaSyDuwDjqfmm0OufcYdnOFP26aewn-cGZTEE",
+  authDomain: "pena4copas.firebaseapp.com",
+  projectId: "pena4copas",
+  storageBucket: "pena4copas.firebasestorage.app",
+  messagingSenderId: "612262435479",
+  appId: "1:612262435479:web:62b27a563e34ed34fe67d2",
 };
 
 const app = initializeApp(firebaseConfig);

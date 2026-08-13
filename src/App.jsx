@@ -130,15 +130,17 @@ function withTimeout(promise, ms) {
 }
 async function storageGet(key, fallback) {
   try {
-    const snap = await withTimeout(getDoc(doc(db, "app", key)), 6000);
+    const snap = await withTimeout(getDoc(doc(db, "app", key)), 15000);
     return snap.exists() ? snap.data().value : fallback;
   } catch {
-    return fallback;
+    // undefined marca "no se pudo conectar", distinto de "se conectó pero el
+    // documento todavía no existe" (que devuelve fallback, típicamente null)
+    return undefined;
   }
 }
 async function storageSet(key, value) {
   try {
-    await withTimeout(setDoc(doc(db, "app", key), { value }), 6000);
+    await withTimeout(setDoc(doc(db, "app", key), { value }), 15000);
     return true;
   } catch {
     return false;
@@ -279,7 +281,7 @@ export default function App() {
         storageGet("pena4copas:reservations", null),
         storageGet("pena4copas:tickets", null),
       ]);
-      if (g === null && n === null && cfg === null && r === null) setOffline(true);
+      if (g === undefined && n === undefined && cfg === undefined && r === undefined) setOffline(true);
       setGallery(g || GALERIA_INICIAL);
       setNosotros(
         n || {
@@ -356,7 +358,7 @@ export default function App() {
         <div style={{ maxWidth: 1100, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px" }}>
           <button onClick={() => setTab("inicio")} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
             <FlagRibbon compact />
-            <span style={{ color: C.crema, fontFamily: "'Alfa Slab One', serif", fontSize: 15 }}>4 DE COPAS</span>
+            <span style={{ color: C.crema, fontFamily: "'Alfa Slab One', serif", fontSize: 15 }}>LOS 4 DE COPAS</span>
           </button>
           <div style={{ display: "none" }} className="md-flex">
           </div>
