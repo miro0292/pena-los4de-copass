@@ -8,12 +8,10 @@ import {
   Image as ImageIcon, Flame, Trash2, Save, Unlock, Copy, Check
 } from "lucide-react";
 import fondoPenaMobile from "./imagenes/fondo/fondo-4-octubre.png";
-import foto1 from "./imagenes/Fotos/1.jpeg";
-import foto2 from "./imagenes/Fotos/2.jpeg";
-import foto3 from "./imagenes/Fotos/3.jpeg";
-import foto4 from "./imagenes/Fotos/4.jpeg";
-import foto5 from "./imagenes/Fotos/5.jpeg";
-import foto6 from "./imagenes/Fotos/6.jpeg";
+import primeraPena from "./imagenes/fondo/primera-pena.jpeg";
+import foto1 from "./imagenes/Fotos/foto1.jpeg";
+import foto2 from "./imagenes/Fotos/foto2.jpeg";
+import foto3 from "./imagenes/Fotos/foto3.jpeg";
 
 /* ---------------------------------- THEME ---------------------------------- */
 const C = {
@@ -54,7 +52,11 @@ const FOLKLORE = [
   { nombre: "Los Carabajal", genero: "Chacarera de Santiago" },
 ];
 
-const GALERIA_INICIAL = [foto1, foto2, foto3, foto4, foto5, foto6].map((url) => ({ url, caption: "" }));
+const GALERIA_INICIAL = [
+  { url: foto1, caption: "Los de siempre, armando la previa" },
+  { url: foto2, caption: "La barra completa" },
+  { url: foto3, caption: "Así va a ser nuestra próxima peña" },
+];
 
 /* Acepta tanto un ID de playlist pelado como un link completo de
    YouTube o YouTube Music y devuelve solo el ID (parámetro ?list=) */
@@ -301,8 +303,7 @@ export default function App() {
       setNosotros(
         n || {
           historia:
-            "La Gran Peña Los 4 de Copas nace de las ganas de juntar mesas largas, asado al buen estilo argentino y folklore de fondo, entre amigos, sin apuro y con el mate dando vueltas. Es una juntada pensada para argentinos y para nuestros hermanos colombianos. Esta es nuestra primera gran peña, y el comienzo de un lugar de encuentro para la comunidad.",
-          fotos: [],
+            "La Gran Peña Los 4 de Copas nació en Bogotá, no en Argentina — y ahí está toda la magia. Somos cuatro argentinos que la vida (y algún que otro vuelo de ida) trajo hasta Colombia hace ya varios años: un cordobés con la tonada más marcada del grupo y el As de copas porque siempre lo veras con una birrita en mano, un salteño que jamás sale de casa sin su mate y si su susuky 650, un rosarino canalla hasta los huesos y cantante lirico, y un patagónico que todavía extraña el viento del sur, el que dice que la fiesta no acaba hasta que salga el sol. Nos conocimos acá, lejos de casa, y lo que arrancó como juntadas para hablar de fútbol y extrañar el asado de la abuela terminó siendo una amistad de las de verdad. Con el tiempo entendimos que teníamos algo hermoso para compartir: nuestra cultura, nuestras tradiciones, nuestro folklore — y muchísimas ganas de decirle gracias a Colombia, este país hermoso que nos abrió las puertas, nos dio un hogar y nos regaló amigos que hoy son familia. La Gran Peña Los 4 de Copas es nuestra forma de devolver ese cariño: un pedacito de Argentina hecho con el corazón, para compartir con la tierra que nos adoptó.",
         }
       );
       setConfig(cfg || { nequiCuenta: "300 000 0000", nequiTitular: "Los 4 de Copas", wompiPublicKey: "", folklorePlaylistId: "PLbieyCp0yxpI" });
@@ -444,6 +445,37 @@ export default function App() {
 }
 
 /* ---------------------------------- INICIO ---------------------------------- */
+const HERO_IMAGES = [fondoPenaMobile, primeraPena];
+
+function HeroCarousel({ images }) {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    if (images.length < 2) return;
+    const t = setInterval(() => setI((v) => (v + 1) % images.length), 5500);
+    return () => clearInterval(t);
+  }, [images.length]);
+
+  return (
+    <div style={{ position: "relative" }}>
+      <img src={images[i]} alt="La Gran Peña Los 4 de Copas" className="hero-poster" />
+      {images.length > 1 && (
+        <>
+          <button onClick={() => setI((v) => (v - 1 + images.length) % images.length)} style={navBtnStyle("left")}><ChevronLeft size={18} /></button>
+          <button onClick={() => setI((v) => (v + 1) % images.length)} style={navBtnStyle("right")}><ChevronRight size={18} /></button>
+          <div style={{ position: "absolute", bottom: 10, left: 0, right: 0, display: "flex", justifyContent: "center", gap: 6 }}>
+            {images.map((_, idx) => (
+              <button key={idx} onClick={() => setI(idx)} style={{
+                width: 8, height: 8, borderRadius: "50%", border: "none", padding: 0, cursor: "pointer",
+                background: idx === i ? C.dorado : "rgba(255,255,255,.5)",
+              }} />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function Inicio({ setTab, gallery }) {
   return (
     <div>
@@ -454,7 +486,7 @@ function Inicio({ setTab, gallery }) {
         }
       `}</style>
       <div style={{ background: C.rojoMasOsc }}>
-        <img src={fondoPenaMobile} alt="La Gran Peña Los 4 de Copas - 4 de Octubre" className="hero-poster" />
+        <HeroCarousel images={HERO_IMAGES} />
       </div>
 
       <div style={{ background: `radial-gradient(circle at 50% 0%, ${C.rojo}, ${C.rojoMasOsc})`, padding: "26px 16px 44px", textAlign: "center" }}>
@@ -699,6 +731,23 @@ function Nosotros({ nosotros, gallery }) {
   return (
     <div style={{ maxWidth: 800, margin: "0 auto", padding: "40px 16px 80px" }}>
       <SectionTitle icon={Users}>Nosotros</SectionTitle>
+
+      <div style={{ background: `linear-gradient(160deg, ${C.rojo}, ${C.rojoOsc})`, border: `2px solid ${C.dorado}`, borderRadius: 14, padding: "22px 20px", marginBottom: 30 }}>
+        <div style={{ textAlign: "center", fontFamily: "'Alfa Slab One', serif", color: C.doradoClaro, fontSize: 18, marginBottom: 10 }}>
+          ¿Qué es una peña?
+        </div>
+        <p style={{ fontSize: 14, lineHeight: 1.8, color: C.crema, textAlign: "center", margin: 0 }}>
+          ¿Alguna vez te preguntaste qué es una peña, che? En Argentina no es una fiesta cualquiera: es la excusa perfecta
+          para juntar amigos alrededor de un buen asado, con la guitarra sonando, el mate circulando de mano en mano y el
+          folklore de fondo marcando el ritmo de la noche. Es esa mezcla única de música, comida y calidez humana que
+          corre por las venas de todo argentino — el arte de convertir una mesa larga y un fueguito en una fiesta que se
+          recuerda para toda la vida. ¡Preparate el apetito y las ganas de compartir, que esto recién empieza!
+        </p>
+      </div>
+
+      <div style={{ textAlign: "center", fontFamily: "'Alfa Slab One', serif", color: C.rojoOsc, fontSize: 18, marginBottom: 10 }}>
+        Nuestra historia
+      </div>
       <p style={{ fontSize: 15, lineHeight: 1.8, color: "#333", textAlign: "center" }}>{nosotros.historia}</p>
 
       <div style={{ marginTop: 30 }}>
