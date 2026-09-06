@@ -7,7 +7,7 @@ import {
   ChevronLeft, ChevronRight, Beef, Wine, UtensilsCrossed, Ticket,
   Image as ImageIcon, Flame, Trash2, Save, Unlock, Copy, Check
 } from "lucide-react";
-import fondoPena from "./imagenes/fondo/fondopena4copas.png";
+import fondoPenaMobile from "./imagenes/fondo/fondo-4-octubre.png";
 import foto1 from "./imagenes/Fotos/1.jpeg";
 import foto2 from "./imagenes/Fotos/2.jpeg";
 import foto3 from "./imagenes/Fotos/3.jpeg";
@@ -423,13 +423,12 @@ export default function App() {
 function Inicio({ setTab, gallery }) {
   return (
     <div>
-      <div style={{ position: "relative", width: "100%", aspectRatio: "1361 / 784", backgroundImage: `url(${fondoPena})`, backgroundSize: "cover", backgroundPosition: "center" }}>
-        <div style={{
-          position: "absolute", left: "42.1%", top: "26.9%", width: "16.35%", aspectRatio: "1 / 1",
-          borderRadius: "50%", overflow: "hidden", background: C.negro,
-        }}>
-          <Carousel images={gallery} />
-        </div>
+      <div style={{ background: `radial-gradient(circle at 50% 20%, ${C.rojo}, ${C.rojoMasOsc})`, padding: "18px 16px" }}>
+        <img
+          src={fondoPenaMobile}
+          alt="La Gran Peña Los 4 de Copas - 4 de Octubre"
+          style={{ display: "block", width: "100%", maxWidth: 440, margin: "0 auto", borderRadius: 10, boxShadow: "0 10px 30px rgba(0,0,0,.5)" }}
+        />
       </div>
 
       <div style={{ background: `radial-gradient(circle at 50% 0%, ${C.rojo}, ${C.rojoMasOsc})`, padding: "26px 16px 44px", textAlign: "center" }}>
@@ -437,7 +436,13 @@ function Inicio({ setTab, gallery }) {
           Asado, guitarreada y fernet compartido. Reservá tu lugar y tu mesa para la primera gran peña argentina.
         </p>
 
-        <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 22, flexWrap: "wrap" }}>
+        <style>{`
+          .hero-cta { display: flex; gap: 12px; justify-content: center; margin-top: 22px; flex-wrap: wrap; }
+          @media (max-width: 480px) {
+            .hero-cta { flex-direction: column; align-items: stretch; padding-bottom: 60px; }
+          }
+        `}</style>
+        <div className="hero-cta">
           <button onClick={() => setTab("reservas")} style={btnGold}>Reservar mi lugar</button>
           <button onClick={() => setTab("nosotros")} style={btnOutline}>Conocé la peña</button>
         </div>
@@ -687,13 +692,18 @@ function Nosotros({ nosotros, gallery }) {
     <div style={{ maxWidth: 800, margin: "0 auto", padding: "40px 16px 80px" }}>
       <SectionTitle icon={Users}>Nosotros</SectionTitle>
       <p style={{ fontSize: 15, lineHeight: 1.8, color: "#333", textAlign: "center" }}>{nosotros.historia}</p>
-      {gallery.length > 0 && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: 10, marginTop: 26 }}>
-          {gallery.map((g, i) => (
-            <img key={i} src={g.url} alt={g.caption || ""} style={{ width: "100%", height: 110, objectFit: "cover", borderRadius: 8, border: `2px solid ${C.doradoClaro}` }} />
-          ))}
+
+      <div style={{ marginTop: 30 }}>
+        <div style={{ textAlign: "center", fontFamily: "'Alfa Slab One', serif", color: C.rojoOsc, fontSize: 16, marginBottom: 12 }}>
+          Nuestros eventos
         </div>
-      )}
+        <div style={{
+          width: "100%", aspectRatio: "4 / 3", borderRadius: 12, overflow: "hidden",
+          border: `4px solid ${C.dorado}`, boxShadow: "0 8px 20px rgba(0,0,0,.35)", background: C.negro,
+        }}>
+          <Carousel images={gallery} />
+        </div>
+      </div>
     </div>
   );
 }
