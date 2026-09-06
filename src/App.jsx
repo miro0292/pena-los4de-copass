@@ -50,11 +50,26 @@ const FOLKLORE = [
   { nombre: "Soledad Pastorutti", genero: "Folklore y chamamé" },
   { nombre: "Los Nocheros", genero: "Folklore salteño" },
   { nombre: "Chaqueño Palavecino", genero: "Zamba y copla" },
-  { nombre: "Los Manseros de Tarija", genero: "Cuarteto cordobés y folklore" },
+  { nombre: "Los Manseros de Tarija", genero: "Cuarteto de folklore argentino" },
   { nombre: "Los Carabajal", genero: "Chacarera de Santiago" },
 ];
 
 const GALERIA_INICIAL = [foto1, foto2, foto3, foto4, foto5, foto6].map((url) => ({ url, caption: "" }));
+
+/* Acepta tanto un ID de playlist pelado como un link completo de
+   YouTube o YouTube Music y devuelve solo el ID (parámetro ?list=) */
+function extraerPlaylistId(input) {
+  const v = (input || "").trim();
+  if (!v) return "";
+  try {
+    const url = new URL(v);
+    const list = url.searchParams.get("list");
+    if (list) return list;
+  } catch {
+    // no era una URL, asumimos que ya es el ID
+  }
+  return v;
+}
 
 const CAJA_PIN = "1810";
 const CURRENCY = (n) => "$" + n.toLocaleString("es-CO");
@@ -266,7 +281,7 @@ export default function App() {
   const [navOpen, setNavOpen] = useState(false);
   const [gallery, setGallery] = useState([]);
   const [nosotros, setNosotros] = useState({ historia: "", fotos: [] });
-  const [config, setConfig] = useState({ nequiCuenta: "300 000 0000", nequiTitular: "Los 4 de Copas", wompiPublicKey: "" });
+  const [config, setConfig] = useState({ nequiCuenta: "300 000 0000", nequiTitular: "Los 4 de Copas", wompiPublicKey: "", folklorePlaylistId: "PLbieyCp0yxpI" });
   const [reservas, setReservas] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [offline, setOffline] = useState(false);
@@ -286,11 +301,11 @@ export default function App() {
       setNosotros(
         n || {
           historia:
-            "La Gran Peña Los 4 de Copas nace de las ganas de juntar mesas largas, guitarras y asado como se hace en Córdoba: entre amigos, sin apuro y con el mate dando vueltas. Esta es nuestra primera gran peña, y el comienzo de un lugar de encuentro para la comunidad argentina.",
+            "La Gran Peña Los 4 de Copas nace de las ganas de juntar mesas largas, asado al buen estilo argentino y folklore de fondo, entre amigos, sin apuro y con el mate dando vueltas. Es una juntada pensada para argentinos y para nuestros hermanos colombianos. Esta es nuestra primera gran peña, y el comienzo de un lugar de encuentro para la comunidad.",
           fotos: [],
         }
       );
-      setConfig(cfg || { nequiCuenta: "300 000 0000", nequiTitular: "Los 4 de Copas", wompiPublicKey: "" });
+      setConfig(cfg || { nequiCuenta: "300 000 0000", nequiTitular: "Los 4 de Copas", wompiPublicKey: "", folklorePlaylistId: "PLbieyCp0yxpI" });
       setReservas(r || []);
       setTickets(t || []);
       setLoaded(true);
@@ -325,7 +340,7 @@ export default function App() {
     { id: "reservas", label: "Reservas" },
     { id: "mi-reserva", label: "Mi reserva" },
     { id: "nosotros", label: "Nosotros" },
-    { id: "folclore", label: "Folclore" },
+    { id: "folclore", label: "Folklore" },
     { id: "caja", label: "Caja / Canje" },
   ];
 
@@ -354,47 +369,56 @@ export default function App() {
       )}
 
       {/* NAV */}
-      <nav style={{ position: "sticky", top: 0, zIndex: 40, background: C.rojoMasOsc, borderBottom: `3px solid ${C.dorado}` }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px" }}>
-          <button onClick={() => setTab("inicio")} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
-            <FlagRibbon compact />
-            <span style={{ color: C.crema, fontFamily: "'Alfa Slab One', serif", fontSize: 15 }}>LOS 4 DE COPAS</span>
-          </button>
-          <div style={{ display: "none" }} className="md-flex">
-          </div>
-          <div style={{ display: "flex", gap: 4 }} className="desktop-nav">
-            {NAV.map((n) => (
-              <button key={n.id} onClick={() => setTab(n.id)}
-                style={{
-                  background: tab === n.id ? C.dorado : "transparent",
-                  color: tab === n.id ? C.negro : C.crema,
-                  border: "none", borderRadius: 5, padding: "8px 12px", fontWeight: 700, fontSize: 13, cursor: "pointer",
-                }}>
-                {n.label}
+      {(() => {
+        const overlay = tab === "inicio" && !navOpen;
+        return (
+          <nav style={{
+            position: overlay ? "absolute" : "sticky", top: 0, left: 0, right: 0, zIndex: 40,
+            background: overlay ? "linear-gradient(to bottom, rgba(0,0,0,.5), transparent)" : C.rojoMasOsc,
+            borderBottom: overlay ? "none" : `3px solid ${C.dorado}`,
+            transition: "background .2s",
+          }}>
+            <div style={{ maxWidth: 1100, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px" }}>
+              <button onClick={() => setTab("inicio")} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
+                <FlagRibbon compact />
+                <span style={{ color: C.crema, fontFamily: "'Alfa Slab One', serif", fontSize: 15, textShadow: overlay ? "0 1px 4px rgba(0,0,0,.8)" : "none" }}>LOS 4 DE COPAS</span>
               </button>
-            ))}
-          </div>
-          <button onClick={() => setNavOpen((v) => !v)} className="mobile-nav-btn" style={{ background: "none", border: "none", color: C.crema, display: "none" }}>
-            {navOpen ? <X /> : <Menu />}
-          </button>
-        </div>
-        <style>{`
-          @media (max-width: 760px){
-            .desktop-nav{display:none !important}
-            .mobile-nav-btn{display:flex !important}
-          }
-        `}</style>
-        {navOpen && (
-          <div style={{ display: "flex", flexDirection: "column", background: C.rojoOsc, padding: 8 }}>
-            {NAV.map((n) => (
-              <button key={n.id} onClick={() => { setTab(n.id); setNavOpen(false); }}
-                style={{ background: "none", border: "none", color: C.crema, textAlign: "left", padding: "10px 6px", fontWeight: 700, fontSize: 14 }}>
-                {n.label}
+              <div style={{ display: "flex", gap: 4 }} className="desktop-nav">
+                {NAV.map((n) => (
+                  <button key={n.id} onClick={() => setTab(n.id)}
+                    style={{
+                      background: tab === n.id ? C.dorado : "transparent",
+                      color: tab === n.id ? C.negro : C.crema,
+                      border: "none", borderRadius: 5, padding: "8px 12px", fontWeight: 700, fontSize: 13, cursor: "pointer",
+                      textShadow: overlay && tab !== n.id ? "0 1px 4px rgba(0,0,0,.8)" : "none",
+                    }}>
+                    {n.label}
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => setNavOpen((v) => !v)} className="mobile-nav-btn" style={{ background: "none", border: "none", color: C.crema, display: "none", filter: overlay ? "drop-shadow(0 1px 4px rgba(0,0,0,.8))" : "none" }}>
+                {navOpen ? <X /> : <Menu />}
               </button>
-            ))}
-          </div>
-        )}
-      </nav>
+            </div>
+            <style>{`
+              @media (max-width: 760px){
+                .desktop-nav{display:none !important}
+                .mobile-nav-btn{display:flex !important}
+              }
+            `}</style>
+            {navOpen && (
+              <div style={{ display: "flex", flexDirection: "column", background: C.rojoOsc, padding: 8 }}>
+                {NAV.map((n) => (
+                  <button key={n.id} onClick={() => { setTab(n.id); setNavOpen(false); }}
+                    style={{ background: "none", border: "none", color: C.crema, textAlign: "left", padding: "10px 6px", fontWeight: 700, fontSize: 14 }}>
+                    {n.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </nav>
+        );
+      })()}
 
       {tab === "inicio" && <Inicio setTab={setTab} gallery={gallery} />}
       {tab === "reservas" && (
@@ -402,7 +426,7 @@ export default function App() {
       )}
       {tab === "mi-reserva" && <MiReserva reservas={reservas} tickets={tickets} />}
       {tab === "nosotros" && <Nosotros nosotros={nosotros} gallery={gallery} />}
-      {tab === "folclore" && <Folclore />}
+      {tab === "folclore" && <Folclore config={config} />}
       {tab === "caja" && (
         <Caja
           reservas={reservas} persistReservas={persistReservas}
@@ -423,17 +447,19 @@ export default function App() {
 function Inicio({ setTab, gallery }) {
   return (
     <div>
-      <div style={{ background: `radial-gradient(circle at 50% 20%, ${C.rojo}, ${C.rojoMasOsc})`, padding: "18px 16px" }}>
-        <img
-          src={fondoPenaMobile}
-          alt="La Gran Peña Los 4 de Copas - 4 de Octubre"
-          style={{ display: "block", width: "100%", maxWidth: 440, margin: "0 auto", borderRadius: 10, boxShadow: "0 10px 30px rgba(0,0,0,.5)" }}
-        />
+      <style>{`
+        .hero-poster { display: block; width: 100%; height: auto; }
+        @media (min-width: 761px) {
+          .hero-poster { width: 480px; margin: 0 auto; }
+        }
+      `}</style>
+      <div style={{ background: C.rojoMasOsc }}>
+        <img src={fondoPenaMobile} alt="La Gran Peña Los 4 de Copas - 4 de Octubre" className="hero-poster" />
       </div>
 
       <div style={{ background: `radial-gradient(circle at 50% 0%, ${C.rojo}, ${C.rojoMasOsc})`, padding: "26px 16px 44px", textAlign: "center" }}>
         <p style={{ color: C.doradoClaro, maxWidth: 480, margin: "0 auto", fontSize: 14, lineHeight: 1.6 }}>
-          Asado, guitarreada y fernet compartido. Reservá tu lugar y tu mesa para la primera gran peña argentina.
+          Asado al buen estilo argentino, fernet compartido y folklore de fondo. Una juntada para argentinos y para nuestros hermanos colombianos.
         </p>
 
         <style>{`
@@ -443,26 +469,8 @@ function Inicio({ setTab, gallery }) {
           }
         `}</style>
         <div className="hero-cta">
-          <button onClick={() => setTab("reservas")} style={btnGold}>Reservar mi lugar</button>
+          <button onClick={() => setTab("reservas")} style={btnGold}>Realiza tu reserva</button>
           <button onClick={() => setTab("nosotros")} style={btnOutline}>Conocé la peña</button>
-        </div>
-      </div>
-
-      <div style={{ maxWidth: 1000, margin: "0 auto", padding: "40px 16px" }}>
-        <SectionTitle icon={Flame}>Qué te espera</SectionTitle>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16 }}>
-          {[
-            { t: "Asado criollo", d: "Cortes a la parrilla, al mejor estilo cordobés.", Icon: Beef },
-            { t: "Folclore en vivo", d: "Guitarreada, chacareras y zambas hasta la madrugada.", Icon: Music2 },
-            { t: "Fernet y birra", d: "Para brindar toda la noche entre amigos.", Icon: Wine },
-            { t: "Comunidad", d: "Un punto de encuentro para argentinos y amigos de Argentina.", Icon: Users },
-          ].map((c) => (
-            <div key={c.t} style={{ background: "#fff", border: `2px solid ${C.doradoClaro}`, borderRadius: 10, padding: 18, textAlign: "center" }}>
-              <c.Icon color={C.rojoOsc} size={26} />
-              <div style={{ fontFamily: "'Alfa Slab One', serif", color: C.rojoOsc, fontSize: 16, margin: "8px 0 4px" }}>{c.t}</div>
-              <div style={{ fontSize: 13, color: "#555" }}>{c.d}</div>
-            </div>
-          ))}
         </div>
       </div>
     </div>
@@ -709,17 +717,40 @@ function Nosotros({ nosotros, gallery }) {
 }
 
 /* ---------------------------------- FOLCLORE ---------------------------------- */
-function Folclore() {
+function Folclore({ config }) {
   return (
     <div style={{ background: C.rojoMasOsc, padding: "40px 0 60px" }}>
       <div style={{ maxWidth: 1000, margin: "0 auto", padding: "0 16px" }}>
         <div style={{ textAlign: "center", marginBottom: 22 }}>
           <div style={{ display: "inline-flex", alignItems: "center", gap: 10, color: C.doradoClaro, fontFamily: "'Alfa Slab One', serif", fontSize: "clamp(22px,4vw,32px)" }}>
-            <Music2 size={24} /> Sonidos de la peña
+            <Music2 size={24} /> Folklore Argentino
           </div>
           <div style={{ width: 90, height: 3, background: C.dorado, margin: "10px auto 0" }} />
+          <p style={{ color: C.crema, fontSize: 13, opacity: 0.85, maxWidth: 560, margin: "14px auto 0" }}>
+            Para que nuestros hermanos colombianos se metan de lleno en el folklore argentino antes de la peña.
+          </p>
         </div>
       </div>
+
+      {config?.folklorePlaylistId ? (
+        <div style={{ maxWidth: 700, margin: "0 auto 30px", padding: "0 16px" }}>
+          <div style={{ position: "relative", width: "100%", aspectRatio: "16 / 9", borderRadius: 12, overflow: "hidden", border: `3px solid ${C.dorado}`, boxShadow: "0 8px 20px rgba(0,0,0,.35)" }}>
+            <iframe
+              width="100%" height="100%"
+              src={`https://www.youtube-nocookie.com/embed/videoseries?list=${config.folklorePlaylistId}`}
+              title="Playlist de folklore argentino"
+              style={{ border: "none", display: "block", position: "absolute", inset: 0 }}
+              allow="autoplay; encrypted-media"
+              allowFullScreen
+            />
+          </div>
+        </div>
+      ) : (
+        <p style={{ textAlign: "center", color: C.doradoClaro, fontSize: 13, marginBottom: 30 }}>
+          Todavía no se cargó una lista de reproducción — se agrega desde el panel de Caja.
+        </p>
+      )}
+
       <div className="scrollx" style={{ display: "flex", gap: 14, overflowX: "auto", padding: "6px 16px 20px" }}>
         {FOLKLORE.map((f) => (
           <div key={f.nombre} style={{ minWidth: 170, background: `linear-gradient(160deg, ${C.rojo}, ${C.rojoOsc})`, border: `2px solid ${C.dorado}`, borderRadius: 12, padding: 16, flexShrink: 0 }}>
@@ -920,6 +951,17 @@ function Caja({ reservas, persistReservas, tickets, persistTickets, gallery, per
         ))}
       </div>
 
+      <div style={{ fontFamily: "'Alfa Slab One', serif", color: C.rojoOsc, fontSize: 15, marginBottom: 8 }}>Playlist de folklore (YouTube)</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 26 }}>
+        <input
+          value={cfgEdit.folklorePlaylistId || ""}
+          onChange={(e) => setCfgEdit({ ...cfgEdit, folklorePlaylistId: extraerPlaylistId(e.target.value) })}
+          style={{ ...inputStyle, flex: 1, minWidth: 220 }}
+          placeholder="Pegá el link de la playlist de YouTube o YouTube Music"
+        />
+        <button onClick={() => persistConfig(cfgEdit)} style={btnOutlineRojo}><Save size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Guardar</button>
+      </div>
+
       <div style={{ fontFamily: "'Alfa Slab One', serif", color: C.rojoOsc, fontSize: 15, marginBottom: 8 }}>Historia (Nosotros)</div>
       <textarea value={historiaEdit} onChange={(e) => setHistoriaEdit(e.target.value)} rows={4} style={{ ...inputStyle, width: "100%", marginBottom: 8 }} />
       <button onClick={() => persistNosotros({ ...nosotros, historia: historiaEdit })} style={{ ...btnOutlineRojo, marginBottom: 26 }}><Save size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Guardar historia</button>
@@ -1003,7 +1045,7 @@ function Footer() {
         <span style={{ display: "flex", alignItems: "center", gap: 6 }}><Phone size={14} /> WhatsApp por reservas</span>
         <span style={{ display: "flex", alignItems: "center", gap: 6 }}><Instagram size={14} /> @los4decopas</span>
       </div>
-      <div style={{ opacity: 0.6 }}>La Gran Peña Los 4 de Copas — hecho con fileteado porteño y orgullo cordobés</div>
+      <div style={{ opacity: 0.6 }}>La Gran Peña Los 4 de Copas — hecho con fileteado porteño y orgullo argentino</div>
     </footer>
   );
 }
