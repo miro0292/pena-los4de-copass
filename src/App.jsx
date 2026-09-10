@@ -12,6 +12,7 @@ import primeraPena from "./imagenes/fondo/primera-pena.jpeg";
 import foto1 from "./imagenes/Fotos/foto1.jpeg";
 import foto2 from "./imagenes/Fotos/foto2.jpeg";
 import foto3 from "./imagenes/Fotos/foto3.jpeg";
+import qrBreB from "./imagenes/llave nequi/qr-breb.jpeg";
 
 /* ---------------------------------- THEME ---------------------------------- */
 const C = {
@@ -77,6 +78,48 @@ const CAJA_PIN = "1810";
 const CURRENCY = (n) => "$" + n.toLocaleString("es-CO");
 const uid = () => Math.random().toString(36).slice(2, 6).toUpperCase();
 const ticketCode = () => uid() + uid();
+
+/* Arma el texto de confirmación por WhatsApp según el estado de pago de la reserva */
+function mensajeWhatsApp(r) {
+  const items = r.items.map((it) => `• ${it.cantidad}× ${it.nombre}`).join("\n");
+  const nombre = r.nombre.split(" ")[0];
+  if (r.pagado) {
+    return `¡Hola ${nombre}! 🇦🇷🇨🇴 Somos de La Gran Peña Los 4 de Copas.
+
+Te confirmamos tu reserva ✅
+🎟️ Código: ${r.id}
+${items}
+💰 Total: ${CURRENCY(r.total)}
+✅ Pago confirmado
+
+Guardá tu código: lo vas a necesitar en la entrada y en la barra/parrilla para canjear cada producto. ¡Nos vemos en la peña! 🔥🥂`;
+  }
+  if (r.pagoReportado) {
+    return `¡Hola ${nombre}! 👋 Somos de La Gran Peña Los 4 de Copas.
+
+Recibimos tu comprobante de pago (ref. ${r.referenciaPago}) y lo estamos verificando ⏳
+🎟️ Código: ${r.id}
+${items}
+💰 Total: ${CURRENCY(r.total)}
+
+Te avisamos apenas quede confirmado. ¡Gracias por tu paciencia! 🙌`;
+  }
+  return `¡Hola ${nombre}! 👋 Somos de La Gran Peña Los 4 de Copas.
+
+Registramos tu reserva 📝
+🎟️ Código: ${r.id}
+${items}
+💰 Total: ${CURRENCY(r.total)}
+⏳ Todavía no vemos tu pago confirmado
+
+Para asegurar tu cupo, transferí usando el código ${r.id} como referencia y reportalo desde la web (o respondé este mensaje con el número de confirmación). ¡Cualquier duda, escribinos! 🙌`;
+}
+
+function linkWhatsApp(r) {
+  const digits = (r.telefono || "").replace(/\D/g, "");
+  const numero = digits.startsWith("57") ? digits : `57${digits}`;
+  return `https://wa.me/${numero}?text=${encodeURIComponent(mensajeWhatsApp(r))}`;
+}
 
 /* Genera un ticket individual y canjeable por cada UNIDAD reservada,
    así 3 asados = 3 tickets que se reclaman uno por uno */
@@ -283,7 +326,7 @@ export default function App() {
   const [navOpen, setNavOpen] = useState(false);
   const [gallery, setGallery] = useState([]);
   const [nosotros, setNosotros] = useState({ historia: "", fotos: [] });
-  const [config, setConfig] = useState({ nequiCuenta: "300 000 0000", nequiTitular: "Los 4 de Copas", wompiPublicKey: "", folklorePlaylistId: "PLbieyCp0yxpI", llaveBreB: "", llaveTitular: "Los 4 de Copas" });
+  const [config, setConfig] = useState({ nequiCuenta: "300 000 0000", nequiTitular: "Los 4 de Copas", wompiPublicKey: "", folklorePlaylistId: "PLbieyCp0yxpI", llaveBreB: "@NEQUIMIG29886", llaveTitular: "Miguel Rojas" });
   const [reservas, setReservas] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [offline, setOffline] = useState(false);
@@ -306,7 +349,7 @@ export default function App() {
             "La Gran Peña Los 4 de Copas nació en Bogotá, no en Argentina — y ahí está toda la magia. Somos cuatro argentinos que la vida (y algún que otro vuelo de ida) trajo hasta Colombia hace ya varios años: un cordobés con la tonada más marcada del grupo y el As de copas porque siempre lo veras con una birrita en mano, un salteño que jamás sale de casa sin su mate y si su susuky 650, un rosarino canalla hasta los huesos y cantante lirico, y un patagónico que todavía extraña el viento del sur, el que dice que la fiesta no acaba hasta que salga el sol. Nos conocimos acá, lejos de casa, y lo que arrancó como juntadas para hablar de fútbol y extrañar el asado de la abuela terminó siendo una amistad de las de verdad. Con el tiempo entendimos que teníamos algo hermoso para compartir: nuestra cultura, nuestras tradiciones, nuestro folklore — y muchísimas ganas de decirle gracias a Colombia, este país hermoso que nos abrió las puertas, nos dio un hogar y nos regaló amigos que hoy son familia. La Gran Peña Los 4 de Copas es nuestra forma de devolver ese cariño: un pedacito de Argentina hecho con el corazón, para compartir con la tierra que nos adoptó.",
         }
       );
-      setConfig(cfg || { nequiCuenta: "300 000 0000", nequiTitular: "Los 4 de Copas", wompiPublicKey: "", folklorePlaylistId: "PLbieyCp0yxpI", llaveBreB: "", llaveTitular: "Los 4 de Copas" });
+      setConfig(cfg || { nequiCuenta: "300 000 0000", nequiTitular: "Los 4 de Copas", wompiPublicKey: "", folklorePlaylistId: "PLbieyCp0yxpI", llaveBreB: "@NEQUIMIG29886", llaveTitular: "Miguel Rojas" });
       setReservas(r || []);
       setTickets(t || []);
       setLoaded(true);
@@ -615,6 +658,15 @@ function Reservas({ reservas, persistReservas, tickets, persistTickets, config }
 
           {!confirmado.pagado && (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ background: "#fff", border: `1.5px solid ${C.doradoClaro}`, borderRadius: 10, padding: "12px 14px", textAlign: "left" }}>
+                <p style={{ fontSize: 12, fontWeight: 800, margin: "0 0 6px", color: C.rojoOsc }}>¿Cómo pagar?</p>
+                <ol style={{ fontSize: 12, color: "#444", margin: 0, paddingLeft: 18, lineHeight: 1.6 }}>
+                  <li>Transferí el total por Nequi o con la llave Bre-B (abajo) usando <b>{confirmado.id}</b> como referencia.</li>
+                  <li>Escribí el número de confirmación que te da tu banco y tocá "Ya transferí".</li>
+                  <li>Un organizador verifica el pago contra el movimiento bancario — no es instantáneo, puede tardar unas horas. Vas a ver el estado acá y en "Mi reserva" cuando cambie a "Pagado".</li>
+                </ol>
+              </div>
+
               <div style={{ background: C.crema, borderRadius: 10, padding: 16 }}>
                 <p style={{ fontSize: 13, margin: 0, fontWeight: 700 }}>Transferí por Nequi a:</p>
                 <p style={{ fontSize: 15, margin: "4px 0" }}>{config.nequiCuenta} — {config.nequiTitular}</p>
@@ -625,13 +677,10 @@ function Reservas({ reservas, persistReservas, tickets, persistTickets, config }
                 <div style={{ background: C.crema, borderRadius: 10, padding: 16 }}>
                   <p style={{ fontSize: 13, margin: 0, fontWeight: 700 }}>O con tu llave Bre-B a:</p>
                   <p style={{ fontSize: 15, margin: "4px 0" }}>{config.llaveBreB} — {config.llaveTitular}</p>
-                  <p style={{ fontSize: 11, color: "#777", margin: 0 }}>Desde cualquier banco, buscá "Bre-B" o "pagar con llave" en tu app.</p>
+                  <img src={qrBreB} alt="QR Bre-B" style={{ width: 160, margin: "8px auto 0", display: "block", borderRadius: 6 }} />
+                  <p style={{ fontSize: 11, color: "#777", margin: "6px 0 0" }}>Desde cualquier banco, buscá "Bre-B" o "pagar con llave" en tu app.</p>
                 </div>
               )}
-
-              <p style={{ fontSize: 11, color: "#777", margin: 0 }}>
-                Poné tu código <b>{confirmado.id}</b> como referencia en la transferencia.
-              </p>
 
               {!confirmado.pagoReportado && (
                 <div style={{ background: "#fff", border: `2px dashed ${C.dorado}`, borderRadius: 10, padding: 14 }}>
@@ -1029,6 +1078,12 @@ function Caja({ reservas, persistReservas, tickets, persistTickets, gallery, per
               </div>
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 <button onClick={() => toggle(r.id, "pagado")} style={pillBtn(r.pagado)}>Pagado</button>
+                {r.telefono && (
+                  <a href={linkWhatsApp(r)} target="_blank" rel="noopener noreferrer" title="Enviar confirmación por WhatsApp"
+                    style={{ background: "#25D366", color: "#fff", border: "none", borderRadius: 20, padding: "6px 10px", display: "flex", alignItems: "center", textDecoration: "none" }}>
+                    <Phone size={14} />
+                  </a>
+                )}
                 <span style={{ fontSize: 12, color: "#666" }}>{entregados}/{tks.length} entregados</span>
               </div>
             </div>
