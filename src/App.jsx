@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "./firebase";
+import emailjs from "@emailjs/browser";
+import jsQR from "jsqr";
 import {
   Menu, X, MapPin, Phone, Instagram, Music2, Users, ShoppingCart,
   CheckCircle2, Circle, Lock, Plus, Minus, Search, Download,
@@ -74,32 +76,35 @@ function extraerPlaylistId(input) {
   return v;
 }
 
-const CAJA_PIN = "1810";
+const ADMIN_PIN_DEFAULT = "1810";
+const STAFF_PIN_DEFAULT = "2026";
+const PRECIO_RESERVA = 50000;
 const CURRENCY = (n) => "$" + n.toLocaleString("es-CO");
 const uid = () => Math.random().toString(36).slice(2, 6).toUpperCase();
 const ticketCode = () => uid() + uid();
 
 /* Arma el texto de confirmación por WhatsApp según el estado de pago de la reserva */
 function mensajeWhatsApp(r) {
-  const items = r.items.map((it) => `• ${it.cantidad}× ${it.nombre}`).join("\n");
   const nombre = r.nombre.split(" ")[0];
+  const totalPersonas = r.personasTotal || 1;
+  const personas = `${totalPersonas} persona${totalPersonas === 1 ? "" : "s"}`;
   if (r.pagado) {
     return `¡Hola ${nombre}! 🇦🇷🇨🇴 Somos de La Gran Peña Los 4 de Copas.
 
 Te confirmamos tu reserva ✅
 🎟️ Código: ${r.id}
-${items}
-💰 Total: ${CURRENCY(r.total)}
+👥 ${personas}
+💰 Total: ${CURRENCY(r.total)} (saldo consumible en productos)
 ✅ Pago confirmado
 
-Guardá tu código: lo vas a necesitar en la entrada y en la barra/parrilla para canjear cada producto. ¡Nos vemos en la peña! 🔥🥂`;
+Guardá tu código: lo vas a necesitar el día del evento para comprar productos con tu saldo. ¡Nos vemos en la peña! 🔥🥂`;
   }
   if (r.pagoReportado) {
     return `¡Hola ${nombre}! 👋 Somos de La Gran Peña Los 4 de Copas.
 
 Recibimos tu comprobante de pago (ref. ${r.referenciaPago}) y lo estamos verificando ⏳
 🎟️ Código: ${r.id}
-${items}
+👥 ${personas}
 💰 Total: ${CURRENCY(r.total)}
 
 Te avisamos apenas quede confirmado. ¡Gracias por tu paciencia! 🙌`;
@@ -108,7 +113,7 @@ Te avisamos apenas quede confirmado. ¡Gracias por tu paciencia! 🙌`;
 
 Registramos tu reserva 📝
 🎟️ Código: ${r.id}
-${items}
+👥 ${personas}
 💰 Total: ${CURRENCY(r.total)}
 ⏳ Todavía no vemos tu pago confirmado
 
@@ -119,22 +124,6 @@ function linkWhatsApp(r) {
   const digits = (r.telefono || "").replace(/\D/g, "");
   const numero = digits.startsWith("57") ? digits : `57${digits}`;
   return `https://wa.me/${numero}?text=${encodeURIComponent(mensajeWhatsApp(r))}`;
-}
-
-/* Genera un ticket individual y canjeable por cada UNIDAD reservada,
-   así 3 asados = 3 tickets que se reclaman uno por uno */
-function generarTickets(reserva) {
-  const tickets = [];
-  reserva.items.forEach((it) => {
-    for (let n = 1; n <= it.cantidad; n++) {
-      tickets.push({
-        codigo: ticketCode(), reservaId: reserva.id, nombreCliente: reserva.nombre,
-        itemKey: it.key, itemNombre: it.nombre, unidad: n, totalUnidades: it.cantidad,
-        entregado: false, entregadoEn: null,
-      });
-    }
-  });
-  return tickets;
 }
 
 /* Carga el widget de Wompi bajo demanda (solo cuando hay llave pública configurada) */
@@ -201,6 +190,23 @@ async function storageGet(key, fallback) {
 async function storageSet(key, value) {
   try {
     await withTimeout(setDoc(doc(db, "app", key), { value }), 15000);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/* Envía un correo vía EmailJS (directo desde el navegador, sin backend propio).
+   Si la config todavía no tiene las 3 claves de EmailJS, no hace nada. */
+async function enviarEmail(config, { to_email, to_name, subject, message }) {
+  if (!config.emailjsServiceId || !config.emailjsTemplateId || !config.emailjsPublicKey || !to_email) return false;
+  try {
+    await emailjs.send(
+      config.emailjsServiceId,
+      config.emailjsTemplateId,
+      { to_email, to_name, subject, message },
+      { publicKey: config.emailjsPublicKey }
+    );
     return true;
   } catch {
     return false;
@@ -326,20 +332,22 @@ export default function App() {
   const [navOpen, setNavOpen] = useState(false);
   const [gallery, setGallery] = useState([]);
   const [nosotros, setNosotros] = useState({ historia: "", fotos: [] });
-  const [config, setConfig] = useState({ nequiCuenta: "300 000 0000", nequiTitular: "Los 4 de Copas", wompiPublicKey: "", folklorePlaylistId: "PLbieyCp0yxpI", llaveBreB: "@NEQUIMIG29886", llaveTitular: "Miguel Rojas" });
+  const [config, setConfig] = useState({ nequiCuenta: "300 000 0000", nequiTitular: "Los 4 de Copas", wompiPublicKey: "", folklorePlaylistId: "PLbieyCp0yxpI", llaveBreB: "@NEQUIMIG29886", llaveTitular: "Miguel Rojas", staffEmail: "penalos4decopas@gmail.com", emailjsServiceId: "service_3gut3gq", emailjsTemplateId: "template_4tv7cqo", emailjsPublicKey: "SnbYUwrSp9PTDEPqs", comprasHabilitadas: true, adminPin: ADMIN_PIN_DEFAULT, staffPin: STAFF_PIN_DEFAULT });
   const [reservas, setReservas] = useState([]);
   const [tickets, setTickets] = useState([]);
+  const [compras, setCompras] = useState([]);
   const [offline, setOffline] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     (async () => {
-      const [g, n, cfg, r, t] = await Promise.all([
+      const [g, n, cfg, r, t, c] = await Promise.all([
         storageGet("pena4copas:gallery", null),
         storageGet("pena4copas:nosotros", null),
         storageGet("pena4copas:config", null),
         storageGet("pena4copas:reservations", null),
         storageGet("pena4copas:tickets", null),
+        storageGet("pena4copas:compras", null),
       ]);
       if (g === undefined && n === undefined && cfg === undefined && r === undefined) setOffline(true);
       setGallery(g || GALERIA_INICIAL);
@@ -349,9 +357,10 @@ export default function App() {
             "La Gran Peña Los 4 de Copas nació en Bogotá, no en Argentina — y ahí está toda la magia. Somos cuatro argentinos que la vida (y algún que otro vuelo de ida) trajo hasta Colombia hace ya varios años: un cordobés con la tonada más marcada del grupo y el As de copas porque siempre lo veras con una birrita en mano, un salteño que jamás sale de casa sin su mate y si su susuky 650, un rosarino canalla hasta los huesos y cantante lirico, y un patagónico que todavía extraña el viento del sur, el que dice que la fiesta no acaba hasta que salga el sol. Nos conocimos acá, lejos de casa, y lo que arrancó como juntadas para hablar de fútbol y extrañar el asado de la abuela terminó siendo una amistad de las de verdad. Con el tiempo entendimos que teníamos algo hermoso para compartir: nuestra cultura, nuestras tradiciones, nuestro folklore — y muchísimas ganas de decirle gracias a Colombia, este país hermoso que nos abrió las puertas, nos dio un hogar y nos regaló amigos que hoy son familia. La Gran Peña Los 4 de Copas es nuestra forma de devolver ese cariño: un pedacito de Argentina hecho con el corazón, para compartir con la tierra que nos adoptó.",
         }
       );
-      setConfig(cfg || { nequiCuenta: "300 000 0000", nequiTitular: "Los 4 de Copas", wompiPublicKey: "", folklorePlaylistId: "PLbieyCp0yxpI", llaveBreB: "@NEQUIMIG29886", llaveTitular: "Miguel Rojas" });
+      setConfig(cfg || { nequiCuenta: "300 000 0000", nequiTitular: "Los 4 de Copas", wompiPublicKey: "", folklorePlaylistId: "PLbieyCp0yxpI", llaveBreB: "@NEQUIMIG29886", llaveTitular: "Miguel Rojas", staffEmail: "penalos4decopas@gmail.com", emailjsServiceId: "service_3gut3gq", emailjsTemplateId: "template_4tv7cqo", emailjsPublicKey: "SnbYUwrSp9PTDEPqs", comprasHabilitadas: true, adminPin: ADMIN_PIN_DEFAULT, staffPin: STAFF_PIN_DEFAULT });
       setReservas(r || []);
       setTickets(t || []);
+      setCompras(c || []);
       setLoaded(true);
     })();
   }, []);
@@ -359,6 +368,11 @@ export default function App() {
   const persistReservas = useCallback(async (next) => {
     setReservas(next);
     const ok = await storageSet("pena4copas:reservations", next);
+    if (!ok) setOffline(true);
+  }, []);
+  const persistCompras = useCallback(async (next) => {
+    setCompras(next);
+    const ok = await storageSet("pena4copas:compras", next);
     if (!ok) setOffline(true);
   }, []);
   const persistTickets = useCallback(async (next) => {
@@ -382,10 +396,10 @@ export default function App() {
   const NAV = [
     { id: "inicio", label: "Inicio" },
     { id: "reservas", label: "Reservas" },
+    { id: "comprar", label: "Comprar" },
     { id: "mi-reserva", label: "Mi reserva" },
     { id: "nosotros", label: "Nosotros" },
     { id: "folclore", label: "Folklore" },
-    { id: "caja", label: "Caja / Canje" },
   ];
 
   if (!loaded) {
@@ -466,22 +480,28 @@ export default function App() {
 
       {tab === "inicio" && <Inicio setTab={setTab} gallery={gallery} />}
       {tab === "reservas" && (
-        <Reservas reservas={reservas} persistReservas={persistReservas} tickets={tickets} persistTickets={persistTickets} config={config} />
+        <Reservas reservas={reservas} persistReservas={persistReservas} config={config} />
       )}
-      {tab === "mi-reserva" && <MiReserva reservas={reservas} tickets={tickets} />}
+      {tab === "comprar" && (
+        <Comprar reservas={reservas} persistReservas={persistReservas} compras={compras} persistCompras={persistCompras} config={config} />
+      )}
+      {tab === "mi-reserva" && <MiReserva reservas={reservas} compras={compras} />}
       {tab === "nosotros" && <Nosotros nosotros={nosotros} gallery={gallery} />}
       {tab === "folclore" && <Folclore config={config} />}
-      {tab === "caja" && (
-        <Caja
+      {tab === "admin" && (
+        <AdminPanel
           reservas={reservas} persistReservas={persistReservas}
-          tickets={tickets} persistTickets={persistTickets}
+          compras={compras} persistCompras={persistCompras}
           gallery={gallery} persistGallery={persistGallery}
           nosotros={nosotros} persistNosotros={persistNosotros}
           config={config} persistConfig={persistConfig}
         />
       )}
+      {tab === "staff" && (
+        <StaffPanel compras={compras} persistCompras={persistCompras} config={config} />
+      )}
 
-      <Footer />
+      <Footer setTab={setTab} />
       <MusicPlayer />
     </div>
   );
@@ -556,44 +576,95 @@ const btnGold = { background: C.dorado, color: C.negro, border: "none", borderRa
 const btnOutline = { background: "transparent", color: C.doradoClaro, border: `2px solid ${C.doradoClaro}`, borderRadius: 8, padding: "12px 22px", fontWeight: 800, cursor: "pointer", fontSize: 14 };
 
 /* ---------------------------------- RESERVAS ---------------------------------- */
-function Reservas({ reservas, persistReservas, tickets, persistTickets, config }) {
-  const [cart, setCart] = useState({});
+/* Bloque de pago manual reutilizado por la Reserva y por la Compra de productos.
+   `onReportar(ref)` debe persistir la referencia en quien lo use (reserva o compra). */
+function BloquePagoManual({ config, codigo, pagado, pagoReportado, referenciaPago, onReportar }) {
+  const [referencia, setReferencia] = useState("");
+  const [reportando, setReportando] = useState(false);
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent("nequi:" + config.nequiCuenta)}`;
+
+  if (pagado) return null;
+
+  const enviar = async () => {
+    if (!referencia.trim()) return;
+    setReportando(true);
+    await onReportar(referencia.trim());
+    setReportando(false);
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ background: "#fff", border: `1.5px solid ${C.doradoClaro}`, borderRadius: 10, padding: "12px 14px", textAlign: "left" }}>
+        <p style={{ fontSize: 12, fontWeight: 800, margin: "0 0 6px", color: C.rojoOsc }}>¿Cómo pagar?</p>
+        <ol style={{ fontSize: 12, color: "#444", margin: 0, paddingLeft: 18, lineHeight: 1.6 }}>
+          <li>Transferí el total por Nequi o con la llave Bre-B (abajo) usando <b>{codigo}</b> como referencia.</li>
+          <li>Escribí el número de confirmación que te da tu banco y tocá "Ya transferí".</li>
+          <li>Un organizador verifica el pago contra el movimiento bancario — no es instantáneo, puede tardar unas horas.</li>
+        </ol>
+      </div>
+
+      <div style={{ background: C.crema, borderRadius: 10, padding: 16 }}>
+        <p style={{ fontSize: 13, margin: 0, fontWeight: 700 }}>Transferí por Nequi a:</p>
+        <p style={{ fontSize: 15, margin: "4px 0" }}>{config.nequiCuenta} — {config.nequiTitular}</p>
+        <img src={qrUrl} alt="QR Nequi" style={{ width: 140, height: 140, margin: "8px auto 0" }} />
+      </div>
+
+      {config.llaveBreB && (
+        <div style={{ background: C.crema, borderRadius: 10, padding: 16 }}>
+          <p style={{ fontSize: 13, margin: 0, fontWeight: 700 }}>O con tu llave Bre-B a:</p>
+          <p style={{ fontSize: 15, margin: "4px 0" }}>{config.llaveBreB} — {config.llaveTitular}</p>
+          <img src={qrBreB} alt="QR Bre-B" style={{ width: 160, margin: "8px auto 0", display: "block", borderRadius: 6 }} />
+          <p style={{ fontSize: 11, color: "#777", margin: "6px 0 0" }}>Desde cualquier banco, buscá "Bre-B" o "pagar con llave" en tu app.</p>
+        </div>
+      )}
+
+      {!pagoReportado && (
+        <div style={{ background: "#fff", border: `2px dashed ${C.dorado}`, borderRadius: 10, padding: 14 }}>
+          <p style={{ fontSize: 12, margin: "0 0 8px", fontWeight: 700 }}>Ya transferiste? Asegurá tu cupo:</p>
+          <input
+            value={referencia}
+            onChange={(e) => setReferencia(e.target.value)}
+            placeholder="Número de referencia/confirmación de la transferencia"
+            style={{ ...inputStyle, width: "100%", marginBottom: 8 }}
+          />
+          <button onClick={enviar} disabled={reportando || !referencia.trim()} style={{ ...btnGold, width: "100%", opacity: reportando || !referencia.trim() ? 0.6 : 1 }}>
+            {reportando ? "Guardando…" : "Ya transferí"}
+          </button>
+        </div>
+      )}
+      {pagoReportado && (
+        <p style={{ fontSize: 12, color: "#b8860b", textAlign: "center", margin: 0 }}>
+          Referencia recibida ({referenciaPago}). Un organizador va a confirmar tu pago contra el movimiento bancario.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Reservas({ reservas, persistReservas, config }) {
   const [nombre, setNombre] = useState("");
+  const [acompanantes, setAcompanantes] = useState(0);
   const [telefono, setTelefono] = useState("");
+  const [email, setEmail] = useState("");
   const [confirmado, setConfirmado] = useState(null);
-  const [misTickets, setMisTickets] = useState([]);
   const [copiado, setCopiado] = useState(false);
   const [pagando, setPagando] = useState(false);
   const [pagoMsg, setPagoMsg] = useState(null);
-  const [referencia, setReferencia] = useState("");
-  const [reportando, setReportando] = useState(false);
 
-  const setQty = (key, qty) => setCart((c) => ({ ...c, [key]: Math.max(0, qty) }));
-  const total = Object.entries(cart).reduce((sum, [k, q]) => {
-    const item = MENU.find((m) => m.key === k);
-    return sum + (item ? item.precio * q : 0);
-  }, 0);
-  const itemsSeleccionados = Object.entries(cart).filter(([, q]) => q > 0);
-
-  const categorias = [...new Set(MENU.map((m) => m.cat))];
+  const personasTotal = 1 + Math.max(0, Number(acompanantes) || 0);
 
   const confirmar = async () => {
-    if (itemsSeleccionados.length === 0 || !nombre.trim()) return;
+    if (!nombre.trim()) return;
     const code = uid();
     const nueva = {
-      id: code, nombre: nombre.trim(), telefono: telefono.trim(),
-      items: itemsSeleccionados.map(([k, q]) => {
-        const m = MENU.find((mm) => mm.key === k);
-        return { key: k, nombre: m.nombre, precio: m.precio, cantidad: q };
-      }),
-      total, pagado: false, pagoReportado: false, referenciaPago: "", entregado: false, creado: new Date().toISOString(),
+      id: code, nombre: nombre.trim(), telefono: telefono.trim(), email: email.trim(),
+      acompanantes: Math.max(0, Number(acompanantes) || 0), personasTotal,
+      total: PRECIO_RESERVA, saldoConsumible: PRECIO_RESERVA, saldoUsado: 0,
+      pagado: false, pagoReportado: false, referenciaPago: "", creado: new Date().toISOString(),
     };
-    const nuevosTickets = generarTickets(nueva);
     await persistReservas([...reservas, nueva]);
-    await persistTickets([...tickets, ...nuevosTickets]);
     setConfirmado(nueva);
-    setMisTickets(nuevosTickets);
-    setCart({}); setNombre(""); setTelefono("");
+    setNombre(""); setAcompanantes(0); setTelefono(""); setEmail("");
   };
 
   const pagarAhora = () => {
@@ -604,7 +675,7 @@ function Reservas({ reservas, persistReservas, tickets, persistTickets, config }
         const next = reservas.map((r) => (r.id === confirmado.id ? { ...r, pagado: true, wompiTransactionId: txId } : r));
         persistReservas(next.length ? next : reservas);
         setConfirmado((c) => ({ ...c, pagado: true }));
-        setPagoMsg({ ok: true, texto: "¡Pago confirmado automáticamente! Ya podés retirar tus productos con los códigos de abajo." });
+        setPagoMsg({ ok: true, texto: "¡Pago confirmado automáticamente!" });
       } else if (estado === "rechazado") {
         setPagoMsg({ ok: false, texto: "El pago no se aprobó. Podés reintentar o transferir manualmente por Nequi." });
       } else {
@@ -613,16 +684,29 @@ function Reservas({ reservas, persistReservas, tickets, persistTickets, config }
     });
   };
 
-  const reportarPago = async () => {
-    if (!referencia.trim()) return;
-    setReportando(true);
-    const next = reservas.map((r) => (r.id === confirmado.id ? { ...r, pagoReportado: true, referenciaPago: referencia.trim() } : r));
+  const reportarPago = async (ref) => {
+    const actualizada = { ...confirmado, pagoReportado: true, referenciaPago: ref };
+    const next = reservas.map((r) => (r.id === confirmado.id ? actualizada : r));
     await persistReservas(next);
-    setConfirmado((c) => ({ ...c, pagoReportado: true, referenciaPago: referencia.trim() }));
-    setReportando(false);
-  };
+    setConfirmado(actualizada);
 
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent("nequi:" + config.nequiCuenta)}`;
+    if (config.staffEmail) {
+      enviarEmail(config, {
+        to_email: config.staffEmail,
+        to_name: "Staff",
+        subject: `Nuevo pago reportado - ${actualizada.id}`,
+        message: `${actualizada.nombre} (${actualizada.personasTotal} persona/s) reportó una transferencia para la reserva ${actualizada.id} (${CURRENCY(actualizada.total)}).\nReferencia: ${ref}\nVerificalo en el panel de Admin contra el movimiento bancario.`,
+      });
+    }
+    if (actualizada.email) {
+      enviarEmail(config, {
+        to_email: actualizada.email,
+        to_name: actualizada.nombre,
+        subject: "¡Ya llegó tu comprobante! - La Gran Peña Los 4 de Copas",
+        message: `¡Hola ${actualizada.nombre.split(" ")[0]}! 👋 Recibimos la referencia de tu transferencia (${ref}) para la reserva ${actualizada.id}. Un organizador la va a verificar contra el movimiento bancario y te avisamos por acá apenas quede confirmada — no falta nada, ya estás a un pasito del asado, el fernet y la buena joda. ¡Gracias por tu paciencia!`,
+      });
+    }
+  };
 
   if (confirmado) {
     return (
@@ -630,15 +714,16 @@ function Reservas({ reservas, persistReservas, tickets, persistTickets, config }
         <div style={{ background: "#fff", border: `3px solid ${C.verde}`, borderRadius: 12, padding: 24, textAlign: "center" }}>
           <CheckCircle2 color={C.verde} size={40} />
           <h2 style={{ fontFamily: "'Alfa Slab One', serif", color: C.rojoOsc, fontSize: 22, margin: "10px 0" }}>¡Reserva registrada!</h2>
-          <p style={{ fontSize: 13, color: "#555" }}>Guardá este código. Lo vas a necesitar en la puerta y en la caja del evento.</p>
+          <p style={{ fontSize: 13, color: "#555" }}>Guardá este código: lo vas a necesitar para comprar productos el día del evento.</p>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, margin: "14px 0" }}>
             <div style={{ fontFamily: "'Alfa Slab One', serif", fontSize: 30, letterSpacing: 4, background: C.crema, border: `2px dashed ${C.dorado}`, borderRadius: 8, padding: "8px 18px" }}>{confirmado.id}</div>
             <button onClick={() => { navigator.clipboard?.writeText(confirmado.id); setCopiado(true); setTimeout(() => setCopiado(false), 1500); }} style={{ background: C.dorado, border: "none", borderRadius: 8, padding: 10, cursor: "pointer" }}>
               {copiado ? <Check size={16} /> : <Copy size={16} />}
             </button>
           </div>
+          <p style={{ fontSize: 13, color: "#555", margin: "0 0 10px" }}>{confirmado.personasTotal} persona(s) en total (vos + {confirmado.acompanantes} acompañante{confirmado.acompanantes === 1 ? "" : "s"})</p>
           <div style={{ fontSize: 14, fontWeight: 800, color: C.rojoOsc, marginBottom: 10 }}>
-            Total: {CURRENCY(confirmado.total)}{" "}
+            Total: {CURRENCY(confirmado.total)} — 100% consumible en productos el día del evento{" "}
             {confirmado.pagado ? (
               <span style={{ color: C.verde }}>· Pagado ✓</span>
             ) : confirmado.pagoReportado ? (
@@ -656,70 +741,11 @@ function Reservas({ reservas, persistReservas, tickets, persistTickets, config }
             </div>
           )}
 
-          {!confirmado.pagado && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <div style={{ background: "#fff", border: `1.5px solid ${C.doradoClaro}`, borderRadius: 10, padding: "12px 14px", textAlign: "left" }}>
-                <p style={{ fontSize: 12, fontWeight: 800, margin: "0 0 6px", color: C.rojoOsc }}>¿Cómo pagar?</p>
-                <ol style={{ fontSize: 12, color: "#444", margin: 0, paddingLeft: 18, lineHeight: 1.6 }}>
-                  <li>Transferí el total por Nequi o con la llave Bre-B (abajo) usando <b>{confirmado.id}</b> como referencia.</li>
-                  <li>Escribí el número de confirmación que te da tu banco y tocá "Ya transferí".</li>
-                  <li>Un organizador verifica el pago contra el movimiento bancario — no es instantáneo, puede tardar unas horas. Vas a ver el estado acá y en "Mi reserva" cuando cambie a "Pagado".</li>
-                </ol>
-              </div>
-
-              <div style={{ background: C.crema, borderRadius: 10, padding: 16 }}>
-                <p style={{ fontSize: 13, margin: 0, fontWeight: 700 }}>Transferí por Nequi a:</p>
-                <p style={{ fontSize: 15, margin: "4px 0" }}>{config.nequiCuenta} — {config.nequiTitular}</p>
-                <img src={qrUrl} alt="QR Nequi" style={{ width: 140, height: 140, margin: "8px auto 0" }} />
-              </div>
-
-              {config.llaveBreB && (
-                <div style={{ background: C.crema, borderRadius: 10, padding: 16 }}>
-                  <p style={{ fontSize: 13, margin: 0, fontWeight: 700 }}>O con tu llave Bre-B a:</p>
-                  <p style={{ fontSize: 15, margin: "4px 0" }}>{config.llaveBreB} — {config.llaveTitular}</p>
-                  <img src={qrBreB} alt="QR Bre-B" style={{ width: 160, margin: "8px auto 0", display: "block", borderRadius: 6 }} />
-                  <p style={{ fontSize: 11, color: "#777", margin: "6px 0 0" }}>Desde cualquier banco, buscá "Bre-B" o "pagar con llave" en tu app.</p>
-                </div>
-              )}
-
-              {!confirmado.pagoReportado && (
-                <div style={{ background: "#fff", border: `2px dashed ${C.dorado}`, borderRadius: 10, padding: 14 }}>
-                  <p style={{ fontSize: 12, margin: "0 0 8px", fontWeight: 700 }}>Ya transferiste? Asegurá tu cupo:</p>
-                  <input
-                    value={referencia}
-                    onChange={(e) => setReferencia(e.target.value)}
-                    placeholder="Número de referencia/confirmación de la transferencia"
-                    style={{ ...inputStyle, width: "100%", marginBottom: 8 }}
-                  />
-                  <button onClick={reportarPago} disabled={reportando || !referencia.trim()} style={{ ...btnGold, width: "100%", opacity: reportando || !referencia.trim() ? 0.6 : 1 }}>
-                    {reportando ? "Guardando…" : "Ya transferí"}
-                  </button>
-                </div>
-              )}
-              {confirmado.pagoReportado && (
-                <p style={{ fontSize: 12, color: "#b8860b", textAlign: "center", margin: 0 }}>
-                  Referencia recibida ({confirmado.referenciaPago}). Un organizador va a confirmar tu pago contra el movimiento bancario.
-                </p>
-              )}
-            </div>
-          )}
-
-          <div style={{ marginTop: 18, textAlign: "left" }}>
-            <p style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Tus códigos de canje (uno por unidad, se reclaman por separado):</p>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 10 }}>
-              {misTickets.map((t) => (
-                <div key={t.codigo} style={{ border: `1.5px dashed ${C.dorado}`, borderRadius: 8, padding: 8, textAlign: "center" }}>
-                  <img src={`https://api.qrserver.com/v1/create-qr-code/?size=110x110&data=${t.codigo}`} alt="QR" style={{ width: "100%" }} />
-                  <div style={{ fontSize: 11, fontWeight: 700, marginTop: 2 }}>{t.itemNombre}</div>
-                  <div style={{ fontSize: 10, color: "#777" }}>{t.unidad}/{t.totalUnidades}</div>
-                  <div style={{ fontFamily: "monospace", fontSize: 12, letterSpacing: 1 }}>{t.codigo}</div>
-                </div>
-              ))}
-            </div>
-            <p style={{ fontSize: 11, color: "#999", marginTop: 8 }}>
-              Sacale captura o guardalos: cada código se puede canjear una sola vez en la barra o la parrilla.
-            </p>
-          </div>
+          <BloquePagoManual
+            config={config} codigo={confirmado.id}
+            pagado={confirmado.pagado} pagoReportado={confirmado.pagoReportado} referenciaPago={confirmado.referenciaPago}
+            onReportar={reportarPago}
+          />
 
           <button onClick={() => setConfirmado(null)} style={{ ...btnGold, marginTop: 18 }}>Hacer otra reserva</button>
         </div>
@@ -728,8 +754,169 @@ function Reservas({ reservas, persistReservas, tickets, persistTickets, config }
   }
 
   return (
+    <div style={{ maxWidth: 480, margin: "0 auto", padding: "40px 16px 80px" }}>
+      <SectionTitle icon={ShoppingCart}>Reservá tu lugar</SectionTitle>
+      <div style={{ background: "#fff", border: `2px solid ${C.doradoClaro}`, borderRadius: 12, padding: 20 }}>
+        <p style={{ fontSize: 13, color: "#555", textAlign: "center", marginTop: 0 }}>
+          <b>{CURRENCY(PRECIO_RESERVA)}</b> por reserva, 100% consumible en productos el día del evento (asado, bebidas, etc.).
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <input placeholder="Tu nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} style={{ ...inputStyle, width: "100%" }} />
+          <div>
+            <label style={{ fontSize: 12, color: "#777", display: "block", marginBottom: 4 }}>Acompañantes (además de vos)</label>
+            <input type="number" min={0} placeholder="0" aria-label="Acompañantes" value={acompanantes} onChange={(e) => setAcompanantes(Math.max(0, Number(e.target.value) || 0))} style={{ ...inputStyle, width: "100%" }} />
+          </div>
+          <p style={{ fontSize: 12, color: C.rojoOsc, fontWeight: 700, margin: 0 }}>Van a ser {personasTotal} persona{personasTotal === 1 ? "" : "s"} en total.</p>
+          <input placeholder="WhatsApp" value={telefono} onChange={(e) => setTelefono(e.target.value)} style={{ ...inputStyle, width: "100%" }} />
+          <input placeholder="Correo (para avisarte del pago)" type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={{ ...inputStyle, width: "100%" }} />
+          <button onClick={confirmar} disabled={!nombre.trim()} style={{ ...btnGold, width: "100%", opacity: !nombre.trim() ? 0.5 : 1 }}>
+            Reservar — {CURRENCY(PRECIO_RESERVA)}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+const stepBtn = { width: 26, height: 26, borderRadius: "50%", border: `1px solid ${C.rojoOsc}`, background: C.crema, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" };
+const inputStyle = { border: `1.5px solid ${C.doradoClaro}`, borderRadius: 8, padding: "9px 10px", fontSize: 13, width: 140 };
+
+/* ---------------------------------- COMPRAR PRODUCTOS (día del evento) ---------------------------------- */
+function Comprar({ reservas, persistReservas, compras, persistCompras, config }) {
+  const [codigo, setCodigo] = useState("");
+  const [reserva, setReserva] = useState(null);
+  const [error, setError] = useState("");
+  const [cart, setCart] = useState({});
+  const [confirmando, setConfirmando] = useState(false);
+  const [confirmada, setConfirmada] = useState(null);
+
+  if (config.comprasHabilitadas === false) {
+    return (
+      <div style={{ maxWidth: 480, margin: "0 auto", padding: "60px 16px", textAlign: "center" }}>
+        <SectionTitle icon={ShoppingCart}>Comprar productos</SectionTitle>
+        <p style={{ fontSize: 14, color: "#555" }}>La compra de productos todavía no está habilitada. Volvé a intentarlo el día del evento.</p>
+      </div>
+    );
+  }
+
+  const buscar = () => {
+    setError("");
+    const code = codigo.trim().toUpperCase();
+    const r = reservas.find((x) => x.id === code);
+    if (!r) { setError("No encontramos ese código de reserva."); setReserva(null); return; }
+    if (!r.pagado) { setError("Tu reserva todavía no está confirmada por el staff. Esperá la confirmación antes de comprar productos."); setReserva(null); return; }
+    setReserva(r);
+  };
+
+  const setQty = (key, qty) => setCart((c) => ({ ...c, [key]: Math.max(0, qty) }));
+  const totalProductos = Object.entries(cart).reduce((sum, [k, q]) => {
+    const item = MENU.find((m) => m.key === k);
+    return sum + (item ? item.precio * q : 0);
+  }, 0);
+  const itemsSeleccionados = Object.entries(cart).filter(([, q]) => q > 0);
+  const categorias = [...new Set(MENU.map((m) => m.cat))];
+
+  const saldoDisponible = reserva ? Math.max(0, (reserva.saldoConsumible || 0) - (reserva.saldoUsado || 0)) : 0;
+  const saldoAplicado = Math.min(totalProductos, saldoDisponible);
+  const montoAPagar = Math.max(0, totalProductos - saldoDisponible);
+
+  const confirmarCompra = async () => {
+    if (itemsSeleccionados.length === 0 || !reserva || confirmando) return;
+    setConfirmando(true);
+    const code = ticketCode();
+    const nueva = {
+      id: code, reservaId: reserva.id, nombre: reserva.nombre,
+      items: itemsSeleccionados.map(([k, q]) => {
+        const m = MENU.find((mm) => mm.key === k);
+        return { key: k, nombre: m.nombre, precio: m.precio, cantidad: q };
+      }),
+      total: totalProductos, saldoAplicado, montoAPagar,
+      pagado: montoAPagar === 0, pagoReportado: false, referenciaPago: "",
+      entregado: false, creado: new Date().toISOString(),
+    };
+    await persistCompras([...compras, nueva]);
+    const reservaActualizada = { ...reserva, saldoUsado: reserva.saldoUsado + saldoAplicado };
+    await persistReservas(reservas.map((r) => (r.id === reserva.id ? reservaActualizada : r)));
+    setConfirmada(nueva);
+    setCart({});
+    setConfirmando(false);
+  };
+
+  const reportarPago = async (ref) => {
+    const actualizada = { ...confirmada, pagoReportado: true, referenciaPago: ref };
+    const next = compras.map((c) => (c.id === confirmada.id ? actualizada : c));
+    await persistCompras(next);
+    setConfirmada(actualizada);
+  };
+
+  if (confirmada) {
+    return (
+      <div style={{ maxWidth: 560, margin: "0 auto", padding: "40px 16px" }}>
+        <div style={{ background: "#fff", border: `3px solid ${C.verde}`, borderRadius: 12, padding: 24, textAlign: "center" }}>
+          <CheckCircle2 color={C.verde} size={40} />
+          <h2 style={{ fontFamily: "'Alfa Slab One', serif", color: C.rojoOsc, fontSize: 22, margin: "10px 0" }}>¡Pedido registrado!</h2>
+          <p style={{ fontSize: 13, color: "#555" }}>Mostrale este código QR al staff en la barra o la parrilla para retirar tus productos.</p>
+          <img src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${confirmada.id}`} alt="QR del pedido" style={{ width: 200, height: 200, margin: "10px auto" }} />
+          <div style={{ fontFamily: "monospace", fontSize: 18, letterSpacing: 2, marginBottom: 14 }}>{confirmada.id}</div>
+
+          <div style={{ textAlign: "left", background: C.crema, borderRadius: 10, padding: 14, marginBottom: 14 }}>
+            {confirmada.items.map((it) => (
+              <div key={it.key} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}>
+                <span>{it.cantidad}× {it.nombre}</span>
+                <span style={{ fontWeight: 700 }}>{CURRENCY(it.precio * it.cantidad)}</span>
+              </div>
+            ))}
+            <div style={{ borderTop: `1px solid ${C.doradoClaro}`, marginTop: 8, paddingTop: 8, fontSize: 13, display: "flex", justifyContent: "space-between", fontWeight: 800 }}>
+              <span>Total</span><span>{CURRENCY(confirmada.total)}</span>
+            </div>
+            {confirmada.saldoAplicado > 0 && (
+              <div style={{ fontSize: 12, color: C.verde, marginTop: 4 }}>Cubierto con tu saldo de reserva: {CURRENCY(confirmada.saldoAplicado)}</div>
+            )}
+          </div>
+
+          {confirmada.montoAPagar > 0 ? (
+            <>
+              <div style={{ fontSize: 14, fontWeight: 800, color: C.rojoOsc, marginBottom: 10 }}>
+                A transferir: {CURRENCY(confirmada.montoAPagar)}{" "}
+                {confirmada.pagado ? <span style={{ color: C.verde }}>· Pagado ✓</span> : confirmada.pagoReportado ? <span style={{ color: "#b8860b" }}>· reportado</span> : null}
+              </div>
+              <BloquePagoManual
+                config={config} codigo={confirmada.id}
+                pagado={confirmada.pagado} pagoReportado={confirmada.pagoReportado} referenciaPago={confirmada.referenciaPago}
+                onReportar={reportarPago}
+              />
+            </>
+          ) : (
+            <p style={{ fontSize: 13, color: C.verde, fontWeight: 700 }}>Ya está todo cubierto con tu saldo — no tenés que transferir nada más.</p>
+          )}
+
+          <button onClick={() => { setConfirmada(null); setReserva(null); setCodigo(""); }} style={{ ...btnGold, marginTop: 18 }}>Hacer otra compra</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!reserva) {
+    return (
+      <div style={{ maxWidth: 420, margin: "0 auto", padding: "60px 16px" }}>
+        <SectionTitle icon={ShoppingCart}>Comprar productos</SectionTitle>
+        <p style={{ fontSize: 13, color: "#555", textAlign: "center" }}>Ingresá tu código de reserva para comprar productos del evento.</p>
+        <div style={{ display: "flex", gap: 8 }}>
+          <input placeholder="Código de reserva" value={codigo} onChange={(e) => setCodigo(e.target.value)} style={{ ...inputStyle, flex: 1, width: "auto" }} />
+          <button onClick={buscar} style={btnGold}>Buscar</button>
+        </div>
+        {error && <p style={{ fontSize: 12, color: "#a33", marginTop: 8, textAlign: "center" }}>{error}</p>}
+      </div>
+    );
+  }
+
+  return (
     <div style={{ maxWidth: 1000, margin: "0 auto", padding: "36px 16px 100px" }}>
-      <SectionTitle icon={ShoppingCart}>Reservá tu lugar y tu mesa</SectionTitle>
+      <SectionTitle icon={ShoppingCart}>Comprar productos</SectionTitle>
+      <div style={{ background: "#fff", border: `2px solid ${C.doradoClaro}`, borderRadius: 10, padding: 14, marginBottom: 20, textAlign: "center" }}>
+        <p style={{ fontSize: 13, margin: 0 }}>{reserva.nombre} · reserva {reserva.id}</p>
+        <p style={{ fontSize: 14, fontWeight: 800, color: C.rojoOsc, margin: "4px 0 0" }}>Saldo disponible: {CURRENCY(saldoDisponible)}</p>
+      </div>
+
       {categorias.map((cat) => (
         <div key={cat} style={{ marginBottom: 26 }}>
           <div style={{ fontFamily: "'Alfa Slab One', serif", color: C.rojoOsc, fontSize: 16, borderBottom: `2px solid ${C.doradoClaro}`, paddingBottom: 4, marginBottom: 10 }}>{cat}</div>
@@ -758,29 +945,25 @@ function Reservas({ reservas, persistReservas, tickets, persistTickets, config }
       <div style={{ position: "sticky", bottom: 12, background: "#fff", border: `3px solid ${C.rojoOsc}`, borderRadius: 12, padding: 16, boxShadow: "0 6px 18px rgba(0,0,0,.2)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
           <div>
-            <div style={{ fontSize: 12, color: "#777" }}>{itemsSeleccionados.length} ítem(s) seleccionados</div>
-            <div style={{ fontFamily: "'Alfa Slab One', serif", fontSize: 22, color: C.rojoOsc }}>{CURRENCY(total)}</div>
+            <div style={{ fontSize: 12, color: "#777" }}>{itemsSeleccionados.length} ítem(s) · Total {CURRENCY(totalProductos)}</div>
+            {saldoAplicado > 0 && <div style={{ fontSize: 12, color: C.verde }}>Saldo aplicado: {CURRENCY(saldoAplicado)}</div>}
+            <div style={{ fontFamily: "'Alfa Slab One', serif", fontSize: 22, color: C.rojoOsc }}>{montoAPagar > 0 ? `A pagar: ${CURRENCY(montoAPagar)}` : "Cubierto por tu saldo"}</div>
           </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <input placeholder="Tu nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} style={inputStyle} />
-            <input placeholder="WhatsApp" value={telefono} onChange={(e) => setTelefono(e.target.value)} style={inputStyle} />
-            <button onClick={confirmar} disabled={itemsSeleccionados.length === 0 || !nombre.trim()} style={{ ...btnGold, opacity: itemsSeleccionados.length === 0 || !nombre.trim() ? 0.5 : 1 }}>
-              Confirmar reserva
-            </button>
-          </div>
+          <button onClick={confirmarCompra} disabled={itemsSeleccionados.length === 0 || confirmando} style={{ ...btnGold, opacity: itemsSeleccionados.length === 0 || confirmando ? 0.5 : 1 }}>
+            {confirmando ? "Confirmando…" : "Confirmar compra"}
+          </button>
         </div>
       </div>
     </div>
   );
 }
-const stepBtn = { width: 26, height: 26, borderRadius: "50%", border: `1px solid ${C.rojoOsc}`, background: C.crema, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" };
-const inputStyle = { border: `1.5px solid ${C.doradoClaro}`, borderRadius: 8, padding: "9px 10px", fontSize: 13, width: 140 };
 
 /* ---------------------------------- MI RESERVA ---------------------------------- */
-function MiReserva({ reservas, tickets }) {
+function MiReserva({ reservas, compras }) {
   const [code, setCode] = useState("");
   const found = reservas.find((r) => r.id === code.trim().toUpperCase());
-  const misTickets = found ? tickets.filter((t) => t.reservaId === found.id) : [];
+  const misCompras = found ? compras.filter((c) => c.reservaId === found.id) : [];
+  const saldoDisponible = found ? Math.max(0, (found.saldoConsumible || 0) - (found.saldoUsado || 0)) : 0;
   return (
     <div style={{ maxWidth: 560, margin: "0 auto", padding: "40px 16px 80px" }}>
       <SectionTitle icon={Search}>Consultá tu reserva</SectionTitle>
@@ -791,24 +974,31 @@ function MiReserva({ reservas, tickets }) {
       {found && (
         <div style={{ background: "#fff", border: `2px solid ${C.doradoClaro}`, borderRadius: 12, padding: 18, marginTop: 16 }}>
           <div style={{ fontWeight: 800 }}>{found.nombre}</div>
-          <div style={{ fontSize: 12, color: "#777", marginBottom: 10 }}>Código {found.id}</div>
+          <div style={{ fontSize: 12, color: "#777", marginBottom: 10 }}>Código {found.id} · {found.personasTotal || 1} persona(s)</div>
           <div style={{ fontWeight: 800, marginTop: 6 }}>Total: {CURRENCY(found.total)}</div>
           <div style={{ display: "flex", gap: 14, marginTop: 8, marginBottom: 14, flexWrap: "wrap" }}>
             <Estado ok label="Reservado" />
             <Estado ok={found.pagado} label="Pagado" />
           </div>
-          <p style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Tus productos (canje individual):</p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {misTickets.map((t) => (
-              <div key={t.codigo} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: C.crema, borderRadius: 8, padding: "8px 10px" }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700 }}>{t.itemNombre} <span style={{ color: "#888", fontWeight: 500 }}>({t.unidad}/{t.totalUnidades})</span></div>
-                  <div style={{ fontFamily: "monospace", fontSize: 12 }}>{t.codigo}</div>
-                </div>
-                <Estado ok={t.entregado} label={t.entregado ? "Entregado" : "Pendiente"} />
+          {found.pagado && (
+            <p style={{ fontSize: 13, fontWeight: 700, color: C.rojoOsc, marginBottom: 14 }}>Saldo disponible para productos: {CURRENCY(saldoDisponible)}</p>
+          )}
+          {misCompras.length > 0 && (
+            <>
+              <p style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Tus compras de productos:</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {misCompras.map((c) => (
+                  <div key={c.id} style={{ background: C.crema, borderRadius: 8, padding: "8px 10px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "monospace" }}>{c.id}</div>
+                      <Estado ok={c.entregado} label={c.entregado ? "Entregado" : "Pendiente"} />
+                    </div>
+                    <div style={{ fontSize: 12, color: "#666" }}>{c.items.map((i) => `${i.cantidad}× ${i.nombre}`).join(", ")}</div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -911,145 +1101,121 @@ function Folclore({ config }) {
 }
 
 /* ---------------------------------- CAJA ---------------------------------- */
-function Caja({ reservas, persistReservas, tickets, persistTickets, gallery, persistGallery, nosotros, persistNosotros, config, persistConfig }) {
+function AdminPanel({ reservas, persistReservas, compras, persistCompras, gallery, persistGallery, nosotros, persistNosotros, config, persistConfig }) {
   const [unlocked, setUnlocked] = useState(false);
   const [pin, setPin] = useState("");
   const [busqueda, setBusqueda] = useState("");
   const [nuevaImg, setNuevaImg] = useState({ url: "", caption: "" });
   const [historiaEdit, setHistoriaEdit] = useState(nosotros.historia);
   const [cfgEdit, setCfgEdit] = useState(config);
-  const [codigoTicket, setCodigoTicket] = useState("");
-  const [ticketResultado, setTicketResultado] = useState(null);
+
+  const ADMIN_PIN = config.adminPin || ADMIN_PIN_DEFAULT;
 
   if (!unlocked) {
     return (
       <div style={{ maxWidth: 380, margin: "0 auto", padding: "60px 16px" }}>
-        <SectionTitle icon={Lock}>Acceso de caja</SectionTitle>
-        <input type="password" value={pin} onChange={(e) => setPin(e.target.value)} placeholder="PIN del staff" style={{ ...inputStyle, width: "100%", textAlign: "center" }} />
-        <button onClick={() => setUnlocked(pin === CAJA_PIN)} style={{ ...btnGold, width: "100%", marginTop: 10 }}>
+        <SectionTitle icon={Lock}>Acceso de administración</SectionTitle>
+        <input type="password" value={pin} onChange={(e) => setPin(e.target.value)} placeholder="PIN de admin" style={{ ...inputStyle, width: "100%", textAlign: "center" }} />
+        <button onClick={() => setUnlocked(pin === ADMIN_PIN)} style={{ ...btnGold, width: "100%", marginTop: 10 }}>
           <Unlock size={14} style={{ marginRight: 6, verticalAlign: -2 }} /> Ingresar
         </button>
-        {pin && pin !== CAJA_PIN && <p style={{ fontSize: 12, color: "#a33", marginTop: 8, textAlign: "center" }}>PIN incorrecto</p>}
+        {pin && pin !== ADMIN_PIN && <p style={{ fontSize: 12, color: "#a33", marginTop: 8, textAlign: "center" }}>PIN incorrecto</p>}
       </div>
     );
   }
 
-  const toggle = (id, campo) => {
+  const toggleReserva = (id, campo) => {
     const next = reservas.map((r) => (r.id === id ? { ...r, [campo]: !r[campo] } : r));
     persistReservas(next);
-  };
+    if (campo === "pagado") {
+      const r = next.find((x) => x.id === id);
+      if (r && r.pagado && r.email) {
+        const personas = `${r.personasTotal || 1} persona${(r.personasTotal || 1) === 1 ? "" : "s"}`;
+        const primerNombre = r.nombre.split(" ")[0];
+        enviarEmail(config, {
+          to_email: r.email,
+          to_name: r.nombre,
+          subject: "¡Confirmadísima tu reserva! — La Gran Peña Los 4 de Copas 🇦🇷",
+          message: `¡Aguante, ${primerNombre}! 🔥🇦🇷
 
-  const buscarTicket = () => {
-    const codigo = codigoTicket.trim().toUpperCase();
-    const idx = tickets.findIndex((t) => t.codigo === codigo);
-    if (idx === -1) { setTicketResultado({ tipo: "no-encontrado" }); return; }
-    setTicketResultado({ tipo: "encontrado", ticket: tickets[idx] });
-  };
-  const confirmarEntrega = () => {
-    if (!ticketResultado || ticketResultado.tipo !== "encontrado") return;
-    const codigo = ticketResultado.ticket.codigo;
-    // Vuelve a chequear contra el estado más reciente para evitar doble entrega
-    const actual = tickets.find((t) => t.codigo === codigo);
-    if (actual.entregado) { setTicketResultado({ tipo: "ya-entregado", ticket: actual }); return; }
-    const next = tickets.map((t) => (t.codigo === codigo ? { ...t, entregado: true, entregadoEn: new Date().toISOString() } : t));
-    persistTickets(next);
-    setTicketResultado({ tipo: "entregado-ahora", ticket: next.find((t) => t.codigo === codigo) });
-    setCodigoTicket("");
+Tu lugar en La Gran Peña Los 4 de Copas quedó CONFIRMADO — ya podés ir guardando apetito, porque se viene una junta como Dios manda.
+
+🎟️ Código: ${r.id}
+👥 ${personas}
+💰 Saldo consumible: ${CURRENCY(r.total)} para gastar en productos el día del evento
+
+Te esperamos con el asado a punto, la carne jugosa cayendo de la parrilla, el fernet bien cargado y un río de anécdotas para contar por años. Folklore de fondo, buena gente alrededor y esa previa que ya sabemos cómo termina: entre amigos, sin mirar el reloj.
+
+Guardá bien tu código — lo vas a necesitar el día del evento para comprar tus productos con el saldo. ¡Nos vemos en la peña, que esta viene brava! 🥩🍷🎸`,
+        });
+      }
+    }
   };
 
   const inventario = {};
-  reservas.forEach((r) => r.items.forEach((it) => {
-    if (!inventario[it.nombre]) inventario[it.nombre] = { reservado: 0, pagado: 0, entregado: 0 };
-    inventario[it.nombre].reservado += it.cantidad;
-    if (r.pagado) inventario[it.nombre].pagado += it.cantidad;
+  compras.forEach((c) => c.items.forEach((it) => {
+    if (!inventario[it.nombre]) inventario[it.nombre] = { comprado: 0, pagado: 0, entregado: 0 };
+    inventario[it.nombre].comprado += it.cantidad;
+    if (c.pagado) inventario[it.nombre].pagado += it.cantidad;
+    if (c.entregado) inventario[it.nombre].entregado += it.cantidad;
   }));
-  tickets.forEach((t) => {
-    if (t.entregado && inventario[t.itemNombre]) inventario[t.itemNombre].entregado += 1;
-  });
 
   const filtradas = reservas.filter((r) => (r.nombre + r.id).toLowerCase().includes(busqueda.toLowerCase()));
-  const totalRecaudado = reservas.filter((r) => r.pagado).reduce((s, r) => s + r.total, 0);
+  const recaudadoReservas = reservas.filter((r) => r.pagado).reduce((s, r) => s + r.total, 0);
+  const recaudadoCompras = compras.filter((c) => c.pagado).reduce((s, c) => s + c.montoAPagar, 0);
 
   const exportarCSV = () => {
-    const rows = [["Código", "Nombre", "Teléfono", "Items", "Total", "Pagado", "Entregado"]];
-    reservas.forEach((r) => rows.push([
-      r.id, r.nombre, r.telefono,
-      r.items.map((i) => `${i.cantidad}x ${i.nombre}`).join(" | "),
-      r.total, r.pagado ? "SI" : "NO", r.entregado ? "SI" : "NO",
+    const rows = [["Código", "Nombre", "Teléfono", "Correo", "Personas", "Total", "Pagado"]];
+    reservas.forEach((r) => rows.push([r.id, r.nombre, r.telefono, r.email, r.personasTotal, r.total, r.pagado ? "SI" : "NO"]));
+    rows.push([]);
+    rows.push(["Compras", "Reserva", "Items", "Total", "A pagar", "Pagado", "Entregado"]);
+    compras.forEach((c) => rows.push([
+      c.id, c.reservaId, c.items.map((i) => `${i.cantidad}x ${i.nombre}`).join(" | "),
+      c.total, c.montoAPagar, c.pagado ? "SI" : "NO", c.entregado ? "SI" : "NO",
     ]));
-    const csv = rows.map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const csv = rows.map((row) => row.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "reservas_4_de_copas.csv";
+    a.download = "pena_4_de_copas_respaldo.csv";
     a.click();
   };
 
   return (
     <div style={{ maxWidth: 1000, margin: "0 auto", padding: "30px 16px 80px" }}>
-      <SectionTitle icon={ShoppingCart}>Panel de caja</SectionTitle>
+      <SectionTitle icon={ShoppingCart}>Panel de administración</SectionTitle>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10, marginBottom: 24 }}>
         <Stat label="Reservas" value={reservas.length} />
         <Stat label="Pagadas" value={reservas.filter((r) => r.pagado).length} />
-        <Stat label="Entregadas" value={reservas.filter((r) => r.entregado).length} />
-        <Stat label="Recaudado" value={CURRENCY(totalRecaudado)} />
+        <Stat label="Compras entregadas" value={compras.filter((c) => c.entregado).length} />
+        <Stat label="Recaudado" value={CURRENCY(recaudadoReservas + recaudadoCompras)} />
       </div>
 
       <div style={{ background: C.rojoMasOsc, borderRadius: 12, padding: 16, marginBottom: 26 }}>
-        <div style={{ color: C.doradoClaro, fontFamily: "'Alfa Slab One', serif", fontSize: 15, marginBottom: 8 }}>Reclamar producto (barra / parrilla)</div>
+        <div style={{ color: C.doradoClaro, fontFamily: "'Alfa Slab One', serif", fontSize: 15, marginBottom: 10 }}>Configuración general</div>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, color: C.crema, fontSize: 13, marginBottom: 12 }}>
+          <input type="checkbox" checked={cfgEdit.comprasHabilitadas !== false} onChange={(e) => { const next = { ...cfgEdit, comprasHabilitadas: e.target.checked }; setCfgEdit(next); persistConfig(next); }} />
+          Compra de productos habilitada
+        </label>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <input
-            value={codigoTicket}
-            onChange={(e) => { setCodigoTicket(e.target.value); setTicketResultado(null); }}
-            onKeyDown={(e) => e.key === "Enter" && buscarTicket()}
-            placeholder="Código del ticket (o pegá lo que escaneaste)"
-            style={{ ...inputStyle, flex: 1, minWidth: 200, textTransform: "uppercase" }}
-          />
-          <button onClick={buscarTicket} style={btnGold}>Buscar</button>
+          <input value={cfgEdit.adminPin || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, adminPin: e.target.value })} style={inputStyle} placeholder="PIN de admin" />
+          <input value={cfgEdit.staffPin || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, staffPin: e.target.value })} style={inputStyle} placeholder="PIN de staff" />
+          <button onClick={() => persistConfig(cfgEdit)} style={btnGold}><Save size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Guardar</button>
         </div>
-
-        {ticketResultado?.tipo === "no-encontrado" && (
-          <p style={{ color: "#ffb4b4", fontSize: 13, marginTop: 10 }}>Ese código no existe. Revisalo con el cliente.</p>
-        )}
-        {ticketResultado?.tipo === "ya-entregado" && (
-          <div style={{ background: "#5a1010", borderRadius: 8, padding: 10, marginTop: 10 }}>
-            <p style={{ color: "#ffb4b4", fontSize: 13, fontWeight: 800, margin: 0 }}>⚠ Este ticket ya fue entregado</p>
-            <p style={{ color: C.crema, fontSize: 12, margin: "4px 0 0" }}>
-              {ticketResultado.ticket.itemNombre} — entregado el {new Date(ticketResultado.ticket.entregadoEn).toLocaleString("es-CO")}
-            </p>
-          </div>
-        )}
-        {ticketResultado?.tipo === "entregado-ahora" && (
-          <div style={{ background: C.verde, borderRadius: 8, padding: 10, marginTop: 10 }}>
-            <p style={{ color: "#fff", fontSize: 13, fontWeight: 800, margin: 0 }}>✓ Entrega confirmada</p>
-            <p style={{ color: "#fff", fontSize: 12, margin: "4px 0 0" }}>{ticketResultado.ticket.itemNombre} ({ticketResultado.ticket.unidad}/{ticketResultado.ticket.totalUnidades}) — {ticketResultado.ticket.nombreCliente}</p>
-          </div>
-        )}
-        {ticketResultado?.tipo === "encontrado" && (
-          <div style={{ background: "#fff", borderRadius: 8, padding: 10, marginTop: 10 }}>
-            <p style={{ fontSize: 13, fontWeight: 800, margin: 0 }}>{ticketResultado.ticket.itemNombre} ({ticketResultado.ticket.unidad}/{ticketResultado.ticket.totalUnidades})</p>
-            <p style={{ fontSize: 12, color: "#666", margin: "2px 0 8px" }}>Cliente: {ticketResultado.ticket.nombreCliente}</p>
-            <button onClick={confirmarEntrega} style={{ ...btnGold, width: "100%" }}>Confirmar entrega</button>
-          </div>
-        )}
-        <p style={{ color: C.doradoClaro, fontSize: 11, marginTop: 10, opacity: 0.85 }}>
-          Cada ticket solo puede entregarse una vez: si dos personas escanean el mismo código, la segunda ve el aviso de "ya entregado".
-          Recomendación: usá un único punto de canje conectado a internet para evitar que dos cajas offline entreguen el mismo producto dos veces.
-        </p>
       </div>
 
-      <div style={{ fontFamily: "'Alfa Slab One', serif", color: C.rojoOsc, fontSize: 15, marginBottom: 8 }}>Inventario de venta</div>
+      <div style={{ fontFamily: "'Alfa Slab One', serif", color: C.rojoOsc, fontSize: 15, marginBottom: 8 }}>Inventario de productos (compras del día del evento)</div>
       <div style={{ overflowX: "auto", marginBottom: 26 }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead><tr style={{ background: C.crema }}>
-            {["Producto", "Reservado", "Pagado", "Entregado"].map((h) => <th key={h} style={thStyle}>{h}</th>)}
+            {["Producto", "Comprado", "Pagado", "Entregado"].map((h) => <th key={h} style={thStyle}>{h}</th>)}
           </tr></thead>
           <tbody>
             {Object.entries(inventario).map(([nombre, v]) => (
-              <tr key={nombre}><td style={tdStyle}>{nombre}</td><td style={tdStyle}>{v.reservado}</td><td style={tdStyle}>{v.pagado}</td><td style={tdStyle}>{v.entregado}</td></tr>
+              <tr key={nombre}><td style={tdStyle}>{nombre}</td><td style={tdStyle}>{v.comprado}</td><td style={tdStyle}>{v.pagado}</td><td style={tdStyle}>{v.entregado}</td></tr>
             ))}
-            {Object.keys(inventario).length === 0 && <tr><td style={tdStyle} colSpan={4}>Aún no hay reservas.</td></tr>}
+            {Object.keys(inventario).length === 0 && <tr><td style={tdStyle} colSpan={4}>Todavía no hay compras de productos.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -1061,15 +1227,13 @@ function Caja({ reservas, persistReservas, tickets, persistTickets, gallery, per
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 30 }}>
         {filtradas.map((r) => {
-          const tks = tickets.filter((t) => t.reservaId === r.id);
-          const entregados = tks.filter((t) => t.entregado).length;
+          const misCompras = compras.filter((c) => c.reservaId === r.id);
           const pendienteVerificar = r.pagoReportado && !r.pagado;
           return (
             <div key={r.id} style={{ background: pendienteVerificar ? "#fffbe8" : "#fff", border: `1.5px solid ${pendienteVerificar ? "#e0b400" : C.doradoClaro}`, borderRadius: 10, padding: 12, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
               <div>
                 <div style={{ fontWeight: 800, fontSize: 13 }}>{r.nombre} <span style={{ color: "#999", fontWeight: 500 }}>· {r.id}</span></div>
-                <div style={{ fontSize: 12, color: "#666" }}>{r.items.map((i) => `${i.cantidad}× ${i.nombre}`).join(", ")}</div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: C.rojoOsc }}>{CURRENCY(r.total)}</div>
+                <div style={{ fontSize: 12, color: "#666" }}>{r.personasTotal || 1} persona(s) · {CURRENCY(r.total)}{misCompras.length > 0 && ` · ${misCompras.length} compra(s) de productos`}</div>
                 {pendienteVerificar && (
                   <div style={{ fontSize: 11, color: "#b8860b", marginTop: 4 }}>
                     ⏳ Reportó transferencia · ref. <b>{r.referenciaPago}</b>
@@ -1077,14 +1241,13 @@ function Caja({ reservas, persistReservas, tickets, persistTickets, gallery, per
                 )}
               </div>
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <button onClick={() => toggle(r.id, "pagado")} style={pillBtn(r.pagado)}>Pagado</button>
+                <button onClick={() => toggleReserva(r.id, "pagado")} style={pillBtn(r.pagado)}>Pagado</button>
                 {r.telefono && (
                   <a href={linkWhatsApp(r)} target="_blank" rel="noopener noreferrer" title="Enviar confirmación por WhatsApp"
                     style={{ background: "#25D366", color: "#fff", border: "none", borderRadius: 20, padding: "6px 10px", display: "flex", alignItems: "center", textDecoration: "none" }}>
                     <Phone size={14} />
                   </a>
                 )}
-                <span style={{ fontSize: 12, color: "#666" }}>{entregados}/{tks.length} entregados</span>
               </div>
             </div>
           );
@@ -1140,6 +1303,20 @@ function Caja({ reservas, persistReservas, tickets, persistTickets, gallery, per
         <button onClick={() => persistConfig(cfgEdit)} style={btnOutlineRojo}><Save size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Guardar</button>
       </div>
 
+      <div style={{ fontFamily: "'Alfa Slab One', serif", color: C.rojoOsc, fontSize: 15, marginBottom: 8 }}>Avisos por correo (EmailJS)</div>
+      <p style={{ fontSize: 12, color: "#777", marginBottom: 8 }}>
+        Se manda un correo al staff cuando alguien reporta una transferencia, y al cliente cuando reporta el pago y cuando se confirma. Creá una cuenta gratis en emailjs.com, conectá tu correo, armá una plantilla con las variables to_email, to_name, subject y message, y pegá acá los 3 códigos.
+      </p>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+        <input value={cfgEdit.staffEmail || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, staffEmail: e.target.value })} style={inputStyle} placeholder="Correo del staff (recibe avisos de pago)" />
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 26 }}>
+        <input value={cfgEdit.emailjsServiceId || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, emailjsServiceId: e.target.value })} style={inputStyle} placeholder="Service ID" />
+        <input value={cfgEdit.emailjsTemplateId || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, emailjsTemplateId: e.target.value })} style={inputStyle} placeholder="Template ID" />
+        <input value={cfgEdit.emailjsPublicKey || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, emailjsPublicKey: e.target.value })} style={inputStyle} placeholder="Public Key" />
+        <button onClick={() => persistConfig(cfgEdit)} style={btnOutlineRojo}><Save size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Guardar</button>
+      </div>
+
       <div style={{ fontFamily: "'Alfa Slab One', serif", color: C.rojoOsc, fontSize: 15, marginBottom: 8 }}>Pago automático (Wompi)</div>
       <p style={{ fontSize: 12, color: "#777", marginBottom: 8 }}>
         Pegá acá la llave pública de tu cuenta Wompi (empieza con pub_test_ o pub_prod_) para habilitar el botón "Pagar ahora" con Nequi, PSE o tarjeta sin intervención humana.
@@ -1156,6 +1333,154 @@ const thStyle = { textAlign: "left", padding: "8px 10px", borderBottom: `2px sol
 const tdStyle = { padding: "8px 10px", borderBottom: "1px solid #eee" };
 const btnOutlineRojo = { background: "#fff", color: C.rojoOsc, border: `2px solid ${C.rojoOsc}`, borderRadius: 8, padding: "9px 14px", fontWeight: 800, cursor: "pointer", fontSize: 13 };
 const pillBtn = (on) => ({ background: on ? C.verde : "#eee", color: on ? "#fff" : "#666", border: "none", borderRadius: 20, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" });
+
+/* ---------------------------------- ESCÁNER QR (cámara) ---------------------------------- */
+function QrScanner({ onResult }) {
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const [activo, setActivo] = useState(false);
+  const [errorCam, setErrorCam] = useState("");
+
+  useEffect(() => {
+    if (!activo) return;
+    let raf; let stream;
+    let cancelado = false;
+    (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        if (cancelado) { stream.getTracks().forEach((t) => t.stop()); return; }
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+        const tick = () => {
+          if (cancelado) return;
+          const v = videoRef.current;
+          if (v && v.readyState === v.HAVE_ENOUGH_DATA) {
+            const canvas = canvasRef.current;
+            canvas.width = v.videoWidth; canvas.height = v.videoHeight;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height);
+            if (code && code.data) { onResult(code.data); setActivo(false); return; }
+          }
+          raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+      } catch {
+        setErrorCam("No se pudo acceder a la cámara. Revisá los permisos del navegador, o usá el código manual abajo.");
+      }
+    })();
+    return () => {
+      cancelado = true;
+      if (raf) cancelAnimationFrame(raf);
+      stream?.getTracks().forEach((t) => t.stop());
+    };
+  }, [activo]);
+
+  return (
+    <div style={{ marginBottom: 14 }}>
+      {!activo && <button onClick={() => { setErrorCam(""); setActivo(true); }} style={{ ...btnGold, width: "100%" }}>📷 Escanear QR con la cámara</button>}
+      {activo && (
+        <div style={{ position: "relative" }}>
+          <video ref={videoRef} playsInline muted style={{ width: "100%", borderRadius: 10, background: "#000" }} />
+          <button onClick={() => setActivo(false)} style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,.6)", border: "none", borderRadius: "50%", width: 30, height: 30, color: "#fff", cursor: "pointer" }}>
+            <X size={16} />
+          </button>
+        </div>
+      )}
+      <canvas ref={canvasRef} style={{ display: "none" }} />
+      {errorCam && <p style={{ color: "#a33", fontSize: 12, marginTop: 6 }}>{errorCam}</p>}
+    </div>
+  );
+}
+
+/* ---------------------------------- PANEL DE STAFF ---------------------------------- */
+function StaffPanel({ compras, persistCompras, config }) {
+  const [unlocked, setUnlocked] = useState(false);
+  const [pin, setPin] = useState("");
+  const [codigo, setCodigo] = useState("");
+  const [resultado, setResultado] = useState(null);
+
+  const STAFF_PIN = config.staffPin || STAFF_PIN_DEFAULT;
+
+  if (!unlocked) {
+    return (
+      <div style={{ maxWidth: 380, margin: "0 auto", padding: "60px 16px" }}>
+        <SectionTitle icon={Lock}>Acceso de staff</SectionTitle>
+        <input type="password" value={pin} onChange={(e) => setPin(e.target.value)} placeholder="PIN de staff" style={{ ...inputStyle, width: "100%", textAlign: "center" }} />
+        <button onClick={() => setUnlocked(pin === STAFF_PIN)} style={{ ...btnGold, width: "100%", marginTop: 10 }}>
+          <Unlock size={14} style={{ marginRight: 6, verticalAlign: -2 }} /> Ingresar
+        </button>
+        {pin && pin !== STAFF_PIN && <p style={{ fontSize: 12, color: "#a33", marginTop: 8, textAlign: "center" }}>PIN incorrecto</p>}
+      </div>
+    );
+  }
+
+  const buscar = (codeOverride) => {
+    const code = (codeOverride ?? codigo).trim().toUpperCase();
+    const c = compras.find((x) => x.id === code);
+    if (!c) { setResultado({ tipo: "no-encontrado" }); return; }
+    setResultado({ tipo: "encontrada", compra: c });
+  };
+
+  const marcar = async (campo) => {
+    if (!resultado?.compra) return;
+    const id = resultado.compra.id;
+    const next = compras.map((c) => (c.id === id ? { ...c, [campo]: true, ...(campo === "entregado" ? { entregadoEn: new Date().toISOString() } : {}) } : c));
+    await persistCompras(next);
+    setResultado({ tipo: "encontrada", compra: next.find((c) => c.id === id) });
+  };
+
+  return (
+    <div style={{ maxWidth: 480, margin: "0 auto", padding: "30px 16px 80px" }}>
+      <SectionTitle icon={Ticket}>Panel de staff</SectionTitle>
+
+      <QrScanner onResult={(data) => { setCodigo(data); buscar(data); }} />
+
+      <div style={{ display: "flex", gap: 8 }}>
+        <input
+          value={codigo}
+          onChange={(e) => { setCodigo(e.target.value); setResultado(null); }}
+          onKeyDown={(e) => e.key === "Enter" && buscar()}
+          placeholder="Código del pedido"
+          style={{ ...inputStyle, flex: 1, textTransform: "uppercase" }}
+        />
+        <button onClick={() => buscar()} style={btnGold}>Buscar</button>
+      </div>
+
+      {resultado?.tipo === "no-encontrado" && <p style={{ color: "#a33", fontSize: 13, marginTop: 12 }}>No encontramos ese código.</p>}
+
+      {resultado?.tipo === "encontrada" && (
+        <div style={{ background: "#fff", border: `2px solid ${C.doradoClaro}`, borderRadius: 12, padding: 16, marginTop: 16 }}>
+          <div style={{ fontWeight: 800 }}>{resultado.compra.nombre}</div>
+          <div style={{ fontSize: 12, color: "#777", marginBottom: 10 }}>Reserva {resultado.compra.reservaId} · Pedido {resultado.compra.id}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 12 }}>
+            {resultado.compra.items.map((it) => (
+              <div key={it.key} style={{ fontSize: 13 }}>{it.cantidad}× {it.nombre}</div>
+            ))}
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
+            Total: {CURRENCY(resultado.compra.total)}{resultado.compra.montoAPagar > 0 && ` · a transferir ${CURRENCY(resultado.compra.montoAPagar)}`}
+          </div>
+          <div style={{ display: "flex", gap: 14, marginBottom: 14, flexWrap: "wrap" }}>
+            <Estado ok={resultado.compra.pagado} label="Pagado" />
+            <Estado ok={resultado.compra.entregado} label="Entregado" />
+          </div>
+          {!resultado.compra.pagado && (
+            <button onClick={() => marcar("pagado")} style={{ ...btnOutlineRojo, width: "100%", marginBottom: 8 }}>Marcar pagado</button>
+          )}
+          {resultado.compra.entregado ? (
+            <p style={{ fontSize: 12, color: "#a33", textAlign: "center" }}>⚠ Ya fue entregado el {new Date(resultado.compra.entregadoEn).toLocaleString("es-CO")}</p>
+          ) : (
+            <button onClick={() => marcar("entregado")} disabled={!resultado.compra.pagado} style={{ ...btnGold, width: "100%", opacity: resultado.compra.pagado ? 1 : 0.5 }}>
+              Marcar entregado
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 function Stat({ label, value }) {
   return (
     <div style={{ background: "#fff", border: `2px solid ${C.doradoClaro}`, borderRadius: 10, padding: 14, textAlign: "center" }}>
@@ -1204,7 +1529,7 @@ function MusicPlayer() {
 }
 
 /* ---------------------------------- FOOTER ---------------------------------- */
-function Footer() {
+function Footer({ setTab }) {
   return (
     <footer style={{ background: C.negro, color: C.crema, padding: "26px 16px", textAlign: "center", fontSize: 12 }}>
       <div style={{ display: "flex", gap: 18, justifyContent: "center", marginBottom: 10, flexWrap: "wrap" }}>
@@ -1213,6 +1538,11 @@ function Footer() {
         <span style={{ display: "flex", alignItems: "center", gap: 6 }}><Instagram size={14} /> @los4decopas</span>
       </div>
       <div style={{ opacity: 0.6 }}>La Gran Peña Los 4 de Copas — hecho con fileteado porteño y orgullo argentino</div>
+      <div style={{ marginTop: 10, opacity: 0.35, fontSize: 10 }}>
+        <button onClick={() => setTab("admin")} style={{ background: "none", border: "none", color: C.crema, cursor: "pointer", fontSize: 10, padding: 4 }}>admin</button>
+        {" · "}
+        <button onClick={() => setTab("staff")} style={{ background: "none", border: "none", color: C.crema, cursor: "pointer", fontSize: 10, padding: 4 }}>staff</button>
+      </div>
     </footer>
   );
 }
