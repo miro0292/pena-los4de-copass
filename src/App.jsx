@@ -283,7 +283,7 @@ export default function App() {
   const [navOpen, setNavOpen] = useState(false);
   const [gallery, setGallery] = useState([]);
   const [nosotros, setNosotros] = useState({ historia: "", fotos: [] });
-  const [config, setConfig] = useState({ nequiCuenta: "300 000 0000", nequiTitular: "Los 4 de Copas", wompiPublicKey: "", folklorePlaylistId: "PLbieyCp0yxpI" });
+  const [config, setConfig] = useState({ nequiCuenta: "300 000 0000", nequiTitular: "Los 4 de Copas", wompiPublicKey: "", folklorePlaylistId: "PLbieyCp0yxpI", llaveBreB: "", llaveTitular: "Los 4 de Copas" });
   const [reservas, setReservas] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [offline, setOffline] = useState(false);
@@ -306,7 +306,7 @@ export default function App() {
             "La Gran Peña Los 4 de Copas nació en Bogotá, no en Argentina — y ahí está toda la magia. Somos cuatro argentinos que la vida (y algún que otro vuelo de ida) trajo hasta Colombia hace ya varios años: un cordobés con la tonada más marcada del grupo y el As de copas porque siempre lo veras con una birrita en mano, un salteño que jamás sale de casa sin su mate y si su susuky 650, un rosarino canalla hasta los huesos y cantante lirico, y un patagónico que todavía extraña el viento del sur, el que dice que la fiesta no acaba hasta que salga el sol. Nos conocimos acá, lejos de casa, y lo que arrancó como juntadas para hablar de fútbol y extrañar el asado de la abuela terminó siendo una amistad de las de verdad. Con el tiempo entendimos que teníamos algo hermoso para compartir: nuestra cultura, nuestras tradiciones, nuestro folklore — y muchísimas ganas de decirle gracias a Colombia, este país hermoso que nos abrió las puertas, nos dio un hogar y nos regaló amigos que hoy son familia. La Gran Peña Los 4 de Copas es nuestra forma de devolver ese cariño: un pedacito de Argentina hecho con el corazón, para compartir con la tierra que nos adoptó.",
         }
       );
-      setConfig(cfg || { nequiCuenta: "300 000 0000", nequiTitular: "Los 4 de Copas", wompiPublicKey: "", folklorePlaylistId: "PLbieyCp0yxpI" });
+      setConfig(cfg || { nequiCuenta: "300 000 0000", nequiTitular: "Los 4 de Copas", wompiPublicKey: "", folklorePlaylistId: "PLbieyCp0yxpI", llaveBreB: "", llaveTitular: "Los 4 de Copas" });
       setReservas(r || []);
       setTickets(t || []);
       setLoaded(true);
@@ -522,6 +522,8 @@ function Reservas({ reservas, persistReservas, tickets, persistTickets, config }
   const [copiado, setCopiado] = useState(false);
   const [pagando, setPagando] = useState(false);
   const [pagoMsg, setPagoMsg] = useState(null);
+  const [referencia, setReferencia] = useState("");
+  const [reportando, setReportando] = useState(false);
 
   const setQty = (key, qty) => setCart((c) => ({ ...c, [key]: Math.max(0, qty) }));
   const total = Object.entries(cart).reduce((sum, [k, q]) => {
@@ -541,7 +543,7 @@ function Reservas({ reservas, persistReservas, tickets, persistTickets, config }
         const m = MENU.find((mm) => mm.key === k);
         return { key: k, nombre: m.nombre, precio: m.precio, cantidad: q };
       }),
-      total, pagado: false, entregado: false, creado: new Date().toISOString(),
+      total, pagado: false, pagoReportado: false, referenciaPago: "", entregado: false, creado: new Date().toISOString(),
     };
     const nuevosTickets = generarTickets(nueva);
     await persistReservas([...reservas, nueva]);
@@ -568,6 +570,15 @@ function Reservas({ reservas, persistReservas, tickets, persistTickets, config }
     });
   };
 
+  const reportarPago = async () => {
+    if (!referencia.trim()) return;
+    setReportando(true);
+    const next = reservas.map((r) => (r.id === confirmado.id ? { ...r, pagoReportado: true, referenciaPago: referencia.trim() } : r));
+    await persistReservas(next);
+    setConfirmado((c) => ({ ...c, pagoReportado: true, referenciaPago: referencia.trim() }));
+    setReportando(false);
+  };
+
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent("nequi:" + config.nequiCuenta)}`;
 
   if (confirmado) {
@@ -584,7 +595,12 @@ function Reservas({ reservas, persistReservas, tickets, persistTickets, config }
             </button>
           </div>
           <div style={{ fontSize: 14, fontWeight: 800, color: C.rojoOsc, marginBottom: 10 }}>
-            Total: {CURRENCY(confirmado.total)} {confirmado.pagado && <span style={{ color: C.verde }}>· Pagado ✓</span>}
+            Total: {CURRENCY(confirmado.total)}{" "}
+            {confirmado.pagado ? (
+              <span style={{ color: C.verde }}>· Pagado ✓</span>
+            ) : confirmado.pagoReportado ? (
+              <span style={{ color: "#b8860b" }}>· Pago reportado, verificando…</span>
+            ) : null}
           </div>
 
           {!confirmado.pagado && config.wompiPublicKey && (
@@ -598,13 +614,44 @@ function Reservas({ reservas, persistReservas, tickets, persistTickets, config }
           )}
 
           {!confirmado.pagado && (
-            <div style={{ background: C.crema, borderRadius: 10, padding: 16 }}>
-              <p style={{ fontSize: 13, margin: 0, fontWeight: 700 }}>Transferí por Nequi a:</p>
-              <p style={{ fontSize: 15, margin: "4px 0" }}>{config.nequiCuenta} — {config.nequiTitular}</p>
-              <img src={qrUrl} alt="QR Nequi" style={{ width: 140, height: 140, margin: "8px auto 0" }} />
-              <p style={{ fontSize: 11, color: "#777", marginTop: 6 }}>
-                Poné tu código <b>{confirmado.id}</b> como referencia. Un organizador confirmará tu pago manualmente contra el número de operación.
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ background: C.crema, borderRadius: 10, padding: 16 }}>
+                <p style={{ fontSize: 13, margin: 0, fontWeight: 700 }}>Transferí por Nequi a:</p>
+                <p style={{ fontSize: 15, margin: "4px 0" }}>{config.nequiCuenta} — {config.nequiTitular}</p>
+                <img src={qrUrl} alt="QR Nequi" style={{ width: 140, height: 140, margin: "8px auto 0" }} />
+              </div>
+
+              {config.llaveBreB && (
+                <div style={{ background: C.crema, borderRadius: 10, padding: 16 }}>
+                  <p style={{ fontSize: 13, margin: 0, fontWeight: 700 }}>O con tu llave Bre-B a:</p>
+                  <p style={{ fontSize: 15, margin: "4px 0" }}>{config.llaveBreB} — {config.llaveTitular}</p>
+                  <p style={{ fontSize: 11, color: "#777", margin: 0 }}>Desde cualquier banco, buscá "Bre-B" o "pagar con llave" en tu app.</p>
+                </div>
+              )}
+
+              <p style={{ fontSize: 11, color: "#777", margin: 0 }}>
+                Poné tu código <b>{confirmado.id}</b> como referencia en la transferencia.
               </p>
+
+              {!confirmado.pagoReportado && (
+                <div style={{ background: "#fff", border: `2px dashed ${C.dorado}`, borderRadius: 10, padding: 14 }}>
+                  <p style={{ fontSize: 12, margin: "0 0 8px", fontWeight: 700 }}>Ya transferiste? Asegurá tu cupo:</p>
+                  <input
+                    value={referencia}
+                    onChange={(e) => setReferencia(e.target.value)}
+                    placeholder="Número de referencia/confirmación de la transferencia"
+                    style={{ ...inputStyle, width: "100%", marginBottom: 8 }}
+                  />
+                  <button onClick={reportarPago} disabled={reportando || !referencia.trim()} style={{ ...btnGold, width: "100%", opacity: reportando || !referencia.trim() ? 0.6 : 1 }}>
+                    {reportando ? "Guardando…" : "Ya transferí"}
+                  </button>
+                </div>
+              )}
+              {confirmado.pagoReportado && (
+                <p style={{ fontSize: 12, color: "#b8860b", textAlign: "center", margin: 0 }}>
+                  Referencia recibida ({confirmado.referenciaPago}). Un organizador va a confirmar tu pago contra el movimiento bancario.
+                </p>
+              )}
             </div>
           )}
 
@@ -967,12 +1014,18 @@ function Caja({ reservas, persistReservas, tickets, persistTickets, gallery, per
         {filtradas.map((r) => {
           const tks = tickets.filter((t) => t.reservaId === r.id);
           const entregados = tks.filter((t) => t.entregado).length;
+          const pendienteVerificar = r.pagoReportado && !r.pagado;
           return (
-            <div key={r.id} style={{ background: "#fff", border: `1.5px solid ${C.doradoClaro}`, borderRadius: 10, padding: 12, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+            <div key={r.id} style={{ background: pendienteVerificar ? "#fffbe8" : "#fff", border: `1.5px solid ${pendienteVerificar ? "#e0b400" : C.doradoClaro}`, borderRadius: 10, padding: 12, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
               <div>
                 <div style={{ fontWeight: 800, fontSize: 13 }}>{r.nombre} <span style={{ color: "#999", fontWeight: 500 }}>· {r.id}</span></div>
                 <div style={{ fontSize: 12, color: "#666" }}>{r.items.map((i) => `${i.cantidad}× ${i.nombre}`).join(", ")}</div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: C.rojoOsc }}>{CURRENCY(r.total)}</div>
+                {pendienteVerificar && (
+                  <div style={{ fontSize: 11, color: "#b8860b", marginTop: 4 }}>
+                    ⏳ Reportó transferencia · ref. <b>{r.referenciaPago}</b>
+                  </div>
+                )}
               </div>
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 <button onClick={() => toggle(r.id, "pagado")} style={pillBtn(r.pagado)}>Pagado</button>
@@ -1019,6 +1072,16 @@ function Caja({ reservas, persistReservas, tickets, persistTickets, gallery, per
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
         <input value={cfgEdit.nequiCuenta} onChange={(e) => setCfgEdit({ ...cfgEdit, nequiCuenta: e.target.value })} style={inputStyle} placeholder="Número Nequi" />
         <input value={cfgEdit.nequiTitular} onChange={(e) => setCfgEdit({ ...cfgEdit, nequiTitular: e.target.value })} style={inputStyle} placeholder="Titular" />
+        <button onClick={() => persistConfig(cfgEdit)} style={btnOutlineRojo}><Save size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Guardar</button>
+      </div>
+
+      <div style={{ fontFamily: "'Alfa Slab One', serif", color: C.rojoOsc, fontSize: 15, marginBottom: 8 }}>Llave Bre-B (pago manual, cualquier banco)</div>
+      <p style={{ fontSize: 12, color: "#777", marginBottom: 8 }}>
+        La llave se crea gratis desde la app de tu banco (Bancolombia, Nequi, etc.) — sección Bre-B. Puede ser tu celular, NIT o una llave alfanumérica.
+      </p>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 26 }}>
+        <input value={cfgEdit.llaveBreB || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, llaveBreB: e.target.value })} style={inputStyle} placeholder="Llave Bre-B" />
+        <input value={cfgEdit.llaveTitular || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, llaveTitular: e.target.value })} style={inputStyle} placeholder="Titular" />
         <button onClick={() => persistConfig(cfgEdit)} style={btnOutlineRojo}><Save size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Guardar</button>
       </div>
 
