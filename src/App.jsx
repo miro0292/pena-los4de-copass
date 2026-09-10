@@ -7,7 +7,7 @@ import {
   Menu, X, MapPin, Phone, Instagram, Music2, Users, ShoppingCart,
   CheckCircle2, Circle, Lock, Plus, Minus, Search, Download,
   ChevronLeft, ChevronRight, Beef, Wine, UtensilsCrossed, Ticket,
-  Image as ImageIcon, Flame, Trash2, Save, Unlock, Copy, Check
+  Image as ImageIcon, Flame, Trash2, Save, Unlock, Copy, Check, User, Mail
 } from "lucide-react";
 import fondoPenaMobile from "./imagenes/fondo/fondo-4-octubre.png";
 import primeraPena from "./imagenes/fondo/primera-pena.jpeg";
@@ -336,18 +336,20 @@ export default function App() {
   const [reservas, setReservas] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [compras, setCompras] = useState([]);
+  const [gastos, setGastos] = useState([]);
   const [offline, setOffline] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     (async () => {
-      const [g, n, cfg, r, t, c] = await Promise.all([
+      const [g, n, cfg, r, t, c, ga] = await Promise.all([
         storageGet("pena4copas:gallery", null),
         storageGet("pena4copas:nosotros", null),
         storageGet("pena4copas:config", null),
         storageGet("pena4copas:reservations", null),
         storageGet("pena4copas:tickets", null),
         storageGet("pena4copas:compras", null),
+        storageGet("pena4copas:gastos", null),
       ]);
       if (g === undefined && n === undefined && cfg === undefined && r === undefined) setOffline(true);
       setGallery(g || GALERIA_INICIAL);
@@ -361,6 +363,7 @@ export default function App() {
       setReservas(r || []);
       setTickets(t || []);
       setCompras(c || []);
+      setGastos(ga || []);
       setLoaded(true);
     })();
   }, []);
@@ -373,6 +376,11 @@ export default function App() {
   const persistCompras = useCallback(async (next) => {
     setCompras(next);
     const ok = await storageSet("pena4copas:compras", next);
+    if (!ok) setOffline(true);
+  }, []);
+  const persistGastos = useCallback(async (next) => {
+    setGastos(next);
+    const ok = await storageSet("pena4copas:gastos", next);
     if (!ok) setOffline(true);
   }, []);
   const persistTickets = useCallback(async (next) => {
@@ -492,6 +500,7 @@ export default function App() {
         <AdminPanel
           reservas={reservas} persistReservas={persistReservas}
           compras={compras} persistCompras={persistCompras}
+          gastos={gastos} persistGastos={persistGastos}
           gallery={gallery} persistGallery={persistGallery}
           nosotros={nosotros} persistNosotros={persistNosotros}
           config={config} persistConfig={persistConfig}
@@ -554,7 +563,7 @@ function Inicio({ setTab, gallery }) {
 
       <div style={{ background: `radial-gradient(circle at 50% 0%, ${C.rojo}, ${C.rojoMasOsc})`, padding: "26px 16px 44px", textAlign: "center" }}>
         <p style={{ color: C.doradoClaro, maxWidth: 480, margin: "0 auto", fontSize: 14, lineHeight: 1.6 }}>
-          Che, se viene un asado de novela, fernet que no para de circular y folklore de fondo hasta que salga el sol. La juntada perfecta para los argentinos que andamos por acá y los hermanos colombianos que se quieran sumar.
+          Che, se viene un asado de novela, fernet que no para de circular y buena onda para no dejar de disfrutar. La juntada perfecta para los argentinos que andamos por acá y los hermanos colombianos que se quieran juntar.
         </p>
 
         <style>{`
@@ -753,23 +762,58 @@ function Reservas({ reservas, persistReservas, config }) {
     );
   }
 
+  const iconoInputStyle = { position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: C.dorado, pointerEvents: "none" };
+  const inputConIcono = { ...inputStyle, width: "100%", paddingLeft: 36 };
+
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", padding: "40px 16px 80px" }}>
       <SectionTitle icon={ShoppingCart}>Reservá tu lugar, che</SectionTitle>
-      <div style={{ background: "#fff", border: `2px solid ${C.doradoClaro}`, borderRadius: 12, padding: 20 }}>
-        <p style={{ fontSize: 13, color: "#555", textAlign: "center", marginTop: 0 }}>
-          <b>{CURRENCY(PRECIO_RESERVA)}</b> por reserva, 100% consumible en productos el día del evento (asado, bebidas y todo lo demás).
-        </p>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <input placeholder="Tu nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} style={{ ...inputStyle, width: "100%" }} />
+
+      <div style={{ borderRadius: 16, overflow: "hidden", border: `2px solid ${C.dorado}`, boxShadow: "0 10px 30px rgba(0,0,0,.18)" }}>
+        <div style={{ background: `radial-gradient(circle at 50% 0%, ${C.rojo}, ${C.rojoMasOsc})`, padding: "24px 20px", textAlign: "center" }}>
+          <div style={{
+            display: "inline-flex", alignItems: "baseline", gap: 6, background: C.dorado, color: C.negro,
+            borderRadius: 20, padding: "8px 20px", fontFamily: "'Alfa Slab One', serif", fontSize: 22, marginBottom: 12,
+            boxShadow: "0 4px 10px rgba(0,0,0,.3)",
+          }}>
+            {CURRENCY(PRECIO_RESERVA)}
+          </div>
+          <p style={{ color: C.doradoClaro, fontSize: 13, margin: 0, lineHeight: 1.6, maxWidth: 340, marginLeft: "auto", marginRight: "auto" }}>
+            100% consumible en productos el día del evento — asado, bebidas y todo lo demás.
+          </p>
+        </div>
+
+        <div style={{ background: "#fff", padding: 22, display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ position: "relative" }}>
+            <User size={16} style={iconoInputStyle} />
+            <input placeholder="Tu nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} style={inputConIcono} />
+          </div>
+
           <div>
-            <label style={{ fontSize: 12, color: "#777", display: "block", marginBottom: 4 }}>Acompañantes (además de vos)</label>
+            <label style={{ fontSize: 12, color: "#777", display: "flex", alignItems: "center", gap: 6, marginBottom: 6, fontWeight: 700 }}>
+              <Users size={14} color={C.rojoOsc} /> Acompañantes (además de vos)
+            </label>
             <input type="number" min={0} placeholder="0" aria-label="Acompañantes" value={acompanantes} onChange={(e) => setAcompanantes(Math.max(0, Number(e.target.value) || 0))} style={{ ...inputStyle, width: "100%" }} />
           </div>
-          <p style={{ fontSize: 12, color: C.rojoOsc, fontWeight: 700, margin: 0 }}>Van a ser {personasTotal} persona{personasTotal === 1 ? "" : "s"} en total.</p>
-          <input placeholder="WhatsApp" value={telefono} onChange={(e) => setTelefono(e.target.value)} style={{ ...inputStyle, width: "100%" }} />
-          <input placeholder="Correo (para confirmar tu reserva)" type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={{ ...inputStyle, width: "100%" }} />
-          <button onClick={confirmar} disabled={!nombre.trim()} style={{ ...btnGold, width: "100%", opacity: !nombre.trim() ? 0.5 : 1 }}>
+
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8, background: C.crema, border: `1.5px dashed ${C.dorado}`,
+            borderRadius: 10, padding: "10px 14px", fontSize: 13, color: C.rojoOsc, fontWeight: 800,
+          }}>
+            <Users size={16} /> Van a ser {personasTotal} persona{personasTotal === 1 ? "" : "s"} en total
+          </div>
+
+          <div style={{ position: "relative" }}>
+            <Phone size={16} style={iconoInputStyle} />
+            <input placeholder="WhatsApp" value={telefono} onChange={(e) => setTelefono(e.target.value)} style={inputConIcono} />
+          </div>
+
+          <div style={{ position: "relative" }}>
+            <Mail size={16} style={iconoInputStyle} />
+            <input placeholder="Correo (para confirmar tu reserva)" type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={inputConIcono} />
+          </div>
+
+          <button onClick={confirmar} disabled={!nombre.trim()} style={{ ...btnGold, width: "100%", opacity: !nombre.trim() ? 0.5 : 1, padding: "14px 22px", fontSize: 15 }}>
             Dale, reservo — {CURRENCY(PRECIO_RESERVA)}
           </button>
         </div>
@@ -1101,13 +1145,28 @@ function Folclore({ config }) {
 }
 
 /* ---------------------------------- CAJA ---------------------------------- */
-function AdminPanel({ reservas, persistReservas, compras, persistCompras, gallery, persistGallery, nosotros, persistNosotros, config, persistConfig }) {
+/* Sección plegable del panel de Admin — usa <details> nativo para no
+   necesitar estado propio por sección (y así no perder qué estaba
+   abierto cada vez que el panel se re-renderiza). */
+function Seccion({ titulo, defaultOpen, children }) {
+  return (
+    <details open={defaultOpen} style={{ marginBottom: 14, border: `1.5px solid ${C.doradoClaro}`, borderRadius: 10, background: "#fff", overflow: "hidden" }}>
+      <summary className="admin-summary" style={{ cursor: "pointer", padding: "12px 14px", fontFamily: "'Alfa Slab One', serif", color: C.rojoOsc, fontSize: 15, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        {titulo}
+      </summary>
+      <div style={{ padding: "4px 14px 16px" }}>{children}</div>
+    </details>
+  );
+}
+
+function AdminPanel({ reservas, persistReservas, compras, persistCompras, gastos, persistGastos, gallery, persistGallery, nosotros, persistNosotros, config, persistConfig }) {
   const [unlocked, setUnlocked] = useState(false);
   const [pin, setPin] = useState("");
   const [busqueda, setBusqueda] = useState("");
   const [nuevaImg, setNuevaImg] = useState({ url: "", caption: "" });
   const [historiaEdit, setHistoriaEdit] = useState(nosotros.historia);
   const [cfgEdit, setCfgEdit] = useState(config);
+  const [nuevoGasto, setNuevoGasto] = useState({ cantidad: 1, producto: "", valor: "", quienPago: "", seDebe: false });
 
   const ADMIN_PIN = config.adminPin || ADMIN_PIN_DEFAULT;
 
@@ -1152,17 +1211,38 @@ Guardá bien tu código — lo vas a necesitar el día del evento para comprar t
     }
   };
 
-  const inventario = {};
-  compras.forEach((c) => c.items.forEach((it) => {
-    if (!inventario[it.nombre]) inventario[it.nombre] = { comprado: 0, pagado: 0, entregado: 0 };
-    inventario[it.nombre].comprado += it.cantidad;
-    if (c.pagado) inventario[it.nombre].pagado += it.cantidad;
-    if (c.entregado) inventario[it.nombre].entregado += it.cantidad;
-  }));
+  // Filas de la tabla "Compras del día del evento": una fila por producto vendido,
+  // solo de compras ya pagadas (así el total refleja ventas confirmadas).
+  const filasVentas = [];
+  compras.filter((c) => c.pagado).forEach((c) => {
+    c.items.forEach((it) => {
+      filasVentas.push({
+        key: `${c.id}-${it.key}`, compraId: c.id, cantidad: it.cantidad, producto: it.nombre,
+        valor: it.precio * it.cantidad, entregado: c.entregado,
+      });
+    });
+  });
+  const totalVentasProductos = filasVentas.reduce((s, f) => s + f.valor, 0);
 
   const filtradas = reservas.filter((r) => (r.nombre + r.id).toLowerCase().includes(busqueda.toLowerCase()));
   const recaudadoReservas = reservas.filter((r) => r.pagado).reduce((s, r) => s + r.total, 0);
   const recaudadoCompras = compras.filter((c) => c.pagado).reduce((s, c) => s + c.montoAPagar, 0);
+  const totalIngresos = recaudadoReservas + recaudadoCompras;
+  const totalEgresos = gastos.reduce((s, g) => s + (Number(g.valor) || 0), 0);
+  const gananciaNeta = totalIngresos - totalEgresos;
+
+  const agregarGasto = () => {
+    if (!nuevoGasto.producto.trim() || !nuevoGasto.valor) return;
+    const g = {
+      id: uid(), cantidad: Math.max(1, Number(nuevoGasto.cantidad) || 1), producto: nuevoGasto.producto.trim(),
+      valor: Number(nuevoGasto.valor) || 0, quienPago: nuevoGasto.quienPago.trim(), seDebe: nuevoGasto.seDebe,
+      creado: new Date().toISOString(),
+    };
+    persistGastos([...gastos, g]);
+    setNuevoGasto({ cantidad: 1, producto: "", valor: "", quienPago: "", seDebe: false });
+  };
+  const eliminarGasto = (id) => persistGastos(gastos.filter((g) => g.id !== id));
+  const toggleSeDebe = (id) => persistGastos(gastos.map((g) => (g.id === id ? { ...g, seDebe: !g.seDebe } : g)));
 
   const exportarCSV = () => {
     const rows = [["Código", "Nombre", "Teléfono", "Correo", "Personas", "Total", "Pagado"]];
@@ -1173,6 +1253,11 @@ Guardá bien tu código — lo vas a necesitar el día del evento para comprar t
       c.id, c.reservaId, c.items.map((i) => `${i.cantidad}x ${i.nombre}`).join(" | "),
       c.total, c.montoAPagar, c.pagado ? "SI" : "NO", c.entregado ? "SI" : "NO",
     ]));
+    rows.push([]);
+    rows.push(["Gastos", "Cantidad", "Producto", "Valor", "Quién pagó", "Se debe"]);
+    gastos.forEach((g) => rows.push(["", g.cantidad, g.producto, g.valor, g.quienPago, g.seDebe ? "SI" : "NO"]));
+    rows.push([]);
+    rows.push(["Total ingresos", totalIngresos, "Total egresos", totalEgresos, "Ganancia neta", gananciaNeta]);
     const csv = rows.map((row) => row.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const a = document.createElement("a");
@@ -1183,6 +1268,12 @@ Guardá bien tu código — lo vas a necesitar el día del evento para comprar t
 
   return (
     <div style={{ maxWidth: 1000, margin: "0 auto", padding: "30px 16px 80px" }}>
+      <style>{`
+        .admin-summary { list-style: none; }
+        .admin-summary::-webkit-details-marker { display: none; }
+        .admin-summary::after { content: "▸"; color: ${C.dorado}; font-size: 14px; transition: transform .15s; }
+        details[open] > .admin-summary::after { transform: rotate(90deg); }
+      `}</style>
       <SectionTitle icon={ShoppingCart}>Panel de administración</SectionTitle>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10, marginBottom: 24 }}>
@@ -1192,9 +1283,8 @@ Guardá bien tu código — lo vas a necesitar el día del evento para comprar t
         <Stat label="Recaudado" value={CURRENCY(recaudadoReservas + recaudadoCompras)} />
       </div>
 
-      <div style={{ background: C.rojoMasOsc, borderRadius: 12, padding: 16, marginBottom: 26 }}>
-        <div style={{ color: C.doradoClaro, fontFamily: "'Alfa Slab One', serif", fontSize: 15, marginBottom: 10 }}>Configuración general</div>
-        <label style={{ display: "flex", alignItems: "center", gap: 8, color: C.crema, fontSize: 13, marginBottom: 12 }}>
+      <Seccion titulo="⚙️ Configuración general" defaultOpen>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#333", fontSize: 13, marginBottom: 12 }}>
           <input type="checkbox" checked={cfgEdit.comprasHabilitadas !== false} onChange={(e) => { const next = { ...cfgEdit, comprasHabilitadas: e.target.checked }; setCfgEdit(next); persistConfig(next); }} />
           Compra de productos habilitada
         </label>
@@ -1203,129 +1293,210 @@ Guardá bien tu código — lo vas a necesitar el día del evento para comprar t
           <input value={cfgEdit.staffPin || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, staffPin: e.target.value })} style={inputStyle} placeholder="PIN de staff" />
           <button onClick={() => persistConfig(cfgEdit)} style={btnGold}><Save size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Guardar</button>
         </div>
-      </div>
+      </Seccion>
 
-      <div style={{ fontFamily: "'Alfa Slab One', serif", color: C.rojoOsc, fontSize: 15, marginBottom: 8 }}>Inventario de productos (compras del día del evento)</div>
-      <div style={{ overflowX: "auto", marginBottom: 26 }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-          <thead><tr style={{ background: C.crema }}>
-            {["Producto", "Comprado", "Pagado", "Entregado"].map((h) => <th key={h} style={thStyle}>{h}</th>)}
-          </tr></thead>
-          <tbody>
-            {Object.entries(inventario).map(([nombre, v]) => (
-              <tr key={nombre}><td style={tdStyle}>{nombre}</td><td style={tdStyle}>{v.comprado}</td><td style={tdStyle}>{v.pagado}</td><td style={tdStyle}>{v.entregado}</td></tr>
-            ))}
-            {Object.keys(inventario).length === 0 && <tr><td style={tdStyle} colSpan={4}>Todavía no hay compras de productos.</td></tr>}
-          </tbody>
-        </table>
-      </div>
+      <Seccion titulo="📊 Contabilidad" defaultOpen>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 10 }}>
+          <Stat label="Total ingresos" value={CURRENCY(totalIngresos)} />
+          <Stat label="Total egresos" value={CURRENCY(totalEgresos)} />
+          <Stat label="Ganancia neta" value={CURRENCY(gananciaNeta)} />
+        </div>
+        <p style={{ fontSize: 11, color: "#888", margin: 0 }}>
+          Ingresos = reservas pagadas ({CURRENCY(recaudadoReservas)}) + transferencias extra en compras ({CURRENCY(recaudadoCompras)}).
+          No se cuenta dos veces la plata de la reserva cuando se usa como saldo para comprar productos.
+        </p>
+      </Seccion>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
-        <input placeholder="Buscar por nombre o código" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} style={{ ...inputStyle, flex: 1, minWidth: 180 }} />
-        <button onClick={exportarCSV} style={btnOutlineRojo}><Download size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Exportar respaldo</button>
-      </div>
+      <Seccion titulo="🍖 Compras del día del evento (ingresos)" defaultOpen>
+        <div style={{ overflowX: "auto", marginBottom: 12 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead><tr style={{ background: C.crema }}>
+              {["Cantidad", "Producto", "Valor pagado", "Estado de entrega"].map((h) => <th key={h} style={thStyle}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {filasVentas.map((f) => (
+                <tr key={f.key}>
+                  <td style={tdStyle}>{f.cantidad}</td>
+                  <td style={tdStyle}>{f.producto}</td>
+                  <td style={tdStyle}>{CURRENCY(f.valor)}</td>
+                  <td style={tdStyle}><Estado ok={f.entregado} label={f.entregado ? "Entregado" : "Pendiente"} /></td>
+                </tr>
+              ))}
+              {filasVentas.length === 0 && <tr><td style={tdStyle} colSpan={4}>Todavía no hay compras de productos pagadas.</td></tr>}
+            </tbody>
+            {filasVentas.length > 0 && (
+              <tfoot>
+                <tr>
+                  <td style={{ ...tdStyle, fontWeight: 800, borderTop: `2px solid ${C.dorado}`, borderBottom: "none" }} colSpan={2}>Total de ingresos</td>
+                  <td style={{ ...tdStyle, fontWeight: 800, borderTop: `2px solid ${C.dorado}`, borderBottom: "none" }} colSpan={2}>{CURRENCY(totalVentasProductos)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+        <p style={{ fontSize: 11, color: "#888", margin: 0 }}>
+          Solo cuenta lo que ya está pagado. Una parte puede salir del saldo de $50.000 de la reserva (no es plata nueva) — el total real recaudado está en "Contabilidad" arriba.
+        </p>
+      </Seccion>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 30 }}>
-        {filtradas.map((r) => {
-          const misCompras = compras.filter((c) => c.reservaId === r.id);
-          const pendienteVerificar = r.pagoReportado && !r.pagado;
-          return (
-            <div key={r.id} style={{ background: pendienteVerificar ? "#fffbe8" : "#fff", border: `1.5px solid ${pendienteVerificar ? "#e0b400" : C.doradoClaro}`, borderRadius: 10, padding: 12, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-              <div>
-                <div style={{ fontWeight: 800, fontSize: 13 }}>{r.nombre} <span style={{ color: "#999", fontWeight: 500 }}>· {r.id}</span></div>
-                <div style={{ fontSize: 12, color: "#666" }}>{r.personasTotal || 1} persona(s) · {CURRENCY(r.total)}{misCompras.length > 0 && ` · ${misCompras.length} compra(s) de productos`}</div>
-                {pendienteVerificar && (
-                  <div style={{ fontSize: 11, color: "#b8860b", marginTop: 4 }}>
-                    ⏳ Reportó transferencia · ref. <b>{r.referenciaPago}</b>
-                  </div>
-                )}
+      <Seccion titulo="📤 Gastos" defaultOpen>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+          <input type="number" min={1} value={nuevoGasto.cantidad} onChange={(e) => setNuevoGasto({ ...nuevoGasto, cantidad: e.target.value })} style={{ ...inputStyle, width: 80 }} placeholder="Cant." />
+          <input value={nuevoGasto.producto} onChange={(e) => setNuevoGasto({ ...nuevoGasto, producto: e.target.value })} style={{ ...inputStyle, flex: 1, minWidth: 140 }} placeholder="Producto / concepto" />
+          <input type="number" min={0} value={nuevoGasto.valor} onChange={(e) => setNuevoGasto({ ...nuevoGasto, valor: e.target.value })} style={{ ...inputStyle, width: 130 }} placeholder="Valor pagado" />
+          <input value={nuevoGasto.quienPago} onChange={(e) => setNuevoGasto({ ...nuevoGasto, quienPago: e.target.value })} style={{ ...inputStyle, width: 140 }} placeholder="Quién pagó" />
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+            <input type="checkbox" checked={nuevoGasto.seDebe} onChange={(e) => setNuevoGasto({ ...nuevoGasto, seDebe: e.target.checked })} /> Se debe
+          </label>
+          <button onClick={agregarGasto} style={btnGold}>Agregar</button>
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead><tr style={{ background: C.crema }}>
+              {["Cantidad", "Producto", "Valor pagado", "Quién pagó", "Se debe", ""].map((h) => <th key={h} style={thStyle}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {gastos.map((g) => (
+                <tr key={g.id}>
+                  <td style={tdStyle}>{g.cantidad}</td>
+                  <td style={tdStyle}>{g.producto}</td>
+                  <td style={tdStyle}>{CURRENCY(g.valor)}</td>
+                  <td style={tdStyle}>{g.quienPago || "—"}</td>
+                  <td style={tdStyle}><button onClick={() => toggleSeDebe(g.id)} style={pillBtn(!g.seDebe)}>{g.seDebe ? "Se debe" : "Pagado"}</button></td>
+                  <td style={tdStyle}>
+                    <button onClick={() => eliminarGasto(g.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#a33" }}><Trash2 size={14} /></button>
+                  </td>
+                </tr>
+              ))}
+              {gastos.length === 0 && <tr><td style={tdStyle} colSpan={6}>Todavía no cargaste ningún gasto.</td></tr>}
+            </tbody>
+            {gastos.length > 0 && (
+              <tfoot>
+                <tr>
+                  <td style={{ ...tdStyle, fontWeight: 800, borderTop: `2px solid ${C.dorado}`, borderBottom: "none" }} colSpan={2}>Total de egresos</td>
+                  <td style={{ ...tdStyle, fontWeight: 800, borderTop: `2px solid ${C.dorado}`, borderBottom: "none" }} colSpan={4}>{CURRENCY(totalEgresos)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      </Seccion>
+
+      <Seccion titulo="📋 Reservas" defaultOpen>
+        <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+          <input placeholder="Buscar por nombre o código" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} style={{ ...inputStyle, flex: 1, minWidth: 180 }} />
+          <button onClick={exportarCSV} style={btnOutlineRojo}><Download size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Exportar respaldo</button>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {filtradas.map((r) => {
+            const misCompras = compras.filter((c) => c.reservaId === r.id);
+            const pendienteVerificar = r.pagoReportado && !r.pagado;
+            return (
+              <div key={r.id} style={{ background: pendienteVerificar ? "#fffbe8" : "#fff", border: `1.5px solid ${pendienteVerificar ? "#e0b400" : C.doradoClaro}`, borderRadius: 10, padding: 12, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: 13 }}>{r.nombre} <span style={{ color: "#999", fontWeight: 500 }}>· {r.id}</span></div>
+                  <div style={{ fontSize: 12, color: "#666" }}>{r.personasTotal || 1} persona(s) · {CURRENCY(r.total)}{misCompras.length > 0 && ` · ${misCompras.length} compra(s) de productos`}</div>
+                  {pendienteVerificar && (
+                    <div style={{ fontSize: 11, color: "#b8860b", marginTop: 4 }}>
+                      ⏳ Reportó transferencia · ref. <b>{r.referenciaPago}</b>
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <button onClick={() => toggleReserva(r.id, "pagado")} style={pillBtn(r.pagado)}>Pagado</button>
+                  {r.telefono && (
+                    <a href={linkWhatsApp(r)} target="_blank" rel="noopener noreferrer" title="Enviar confirmación por WhatsApp"
+                      style={{ background: "#25D366", color: "#fff", border: "none", borderRadius: 20, padding: "6px 10px", display: "flex", alignItems: "center", textDecoration: "none" }}>
+                      <Phone size={14} />
+                    </a>
+                  )}
+                </div>
               </div>
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <button onClick={() => toggleReserva(r.id, "pagado")} style={pillBtn(r.pagado)}>Pagado</button>
-                {r.telefono && (
-                  <a href={linkWhatsApp(r)} target="_blank" rel="noopener noreferrer" title="Enviar confirmación por WhatsApp"
-                    style={{ background: "#25D366", color: "#fff", border: "none", borderRadius: 20, padding: "6px 10px", display: "flex", alignItems: "center", textDecoration: "none" }}>
-                    <Phone size={14} />
-                  </a>
-                )}
-              </div>
+            );
+          })}
+        </div>
+      </Seccion>
+
+      <Seccion titulo="🖼️ Galería (carrusel + nosotros)">
+        <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+          <input placeholder="URL de la imagen" value={nuevaImg.url} onChange={(e) => setNuevaImg({ ...nuevaImg, url: e.target.value })} style={{ ...inputStyle, flex: 2, minWidth: 180 }} />
+          <input placeholder="Descripción" value={nuevaImg.caption} onChange={(e) => setNuevaImg({ ...nuevaImg, caption: e.target.value })} style={{ ...inputStyle, flex: 1, minWidth: 140 }} />
+          <button onClick={() => { if (nuevaImg.url) { persistGallery([...gallery, nuevaImg]); setNuevaImg({ url: "", caption: "" }); } }} style={btnGold}>Agregar</button>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(100px,1fr))", gap: 8 }}>
+          {gallery.map((g, i) => (
+            <div key={i} style={{ position: "relative" }}>
+              <img src={g.url} style={{ width: "100%", height: 70, objectFit: "cover", borderRadius: 6 }} />
+              <button onClick={() => persistGallery(gallery.filter((_, idx) => idx !== i))} style={{ position: "absolute", top: 2, right: 2, background: "rgba(0,0,0,.6)", border: "none", borderRadius: "50%", width: 20, height: 20, color: "#fff", cursor: "pointer" }}>
+                <Trash2 size={12} />
+              </button>
             </div>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      </Seccion>
 
-      <div style={{ fontFamily: "'Alfa Slab One', serif", color: C.rojoOsc, fontSize: 15, marginBottom: 8 }}>Galería (carrusel + nosotros)</div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-        <input placeholder="URL de la imagen" value={nuevaImg.url} onChange={(e) => setNuevaImg({ ...nuevaImg, url: e.target.value })} style={{ ...inputStyle, flex: 2, minWidth: 180 }} />
-        <input placeholder="Descripción" value={nuevaImg.caption} onChange={(e) => setNuevaImg({ ...nuevaImg, caption: e.target.value })} style={{ ...inputStyle, flex: 1, minWidth: 140 }} />
-        <button onClick={() => { if (nuevaImg.url) { persistGallery([...gallery, nuevaImg]); setNuevaImg({ url: "", caption: "" }); } }} style={btnGold}>Agregar</button>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(100px,1fr))", gap: 8, marginBottom: 26 }}>
-        {gallery.map((g, i) => (
-          <div key={i} style={{ position: "relative" }}>
-            <img src={g.url} style={{ width: "100%", height: 70, objectFit: "cover", borderRadius: 6 }} />
-            <button onClick={() => persistGallery(gallery.filter((_, idx) => idx !== i))} style={{ position: "absolute", top: 2, right: 2, background: "rgba(0,0,0,.6)", border: "none", borderRadius: "50%", width: 20, height: 20, color: "#fff", cursor: "pointer" }}>
-              <Trash2 size={12} />
-            </button>
-          </div>
-        ))}
-      </div>
+      <Seccion titulo="🎵 Playlist de folklore (YouTube)">
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input
+            value={cfgEdit.folklorePlaylistId || ""}
+            onChange={(e) => setCfgEdit({ ...cfgEdit, folklorePlaylistId: extraerPlaylistId(e.target.value) })}
+            style={{ ...inputStyle, flex: 1, minWidth: 220 }}
+            placeholder="Pegá el link de la playlist de YouTube o YouTube Music"
+          />
+          <button onClick={() => persistConfig(cfgEdit)} style={btnOutlineRojo}><Save size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Guardar</button>
+        </div>
+      </Seccion>
 
-      <div style={{ fontFamily: "'Alfa Slab One', serif", color: C.rojoOsc, fontSize: 15, marginBottom: 8 }}>Playlist de folklore (YouTube)</div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 26 }}>
-        <input
-          value={cfgEdit.folklorePlaylistId || ""}
-          onChange={(e) => setCfgEdit({ ...cfgEdit, folklorePlaylistId: extraerPlaylistId(e.target.value) })}
-          style={{ ...inputStyle, flex: 1, minWidth: 220 }}
-          placeholder="Pegá el link de la playlist de YouTube o YouTube Music"
-        />
-        <button onClick={() => persistConfig(cfgEdit)} style={btnOutlineRojo}><Save size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Guardar</button>
-      </div>
+      <Seccion titulo="📖 Historia (Nosotros)">
+        <textarea value={historiaEdit} onChange={(e) => setHistoriaEdit(e.target.value)} rows={4} style={{ ...inputStyle, width: "100%", marginBottom: 8 }} />
+        <button onClick={() => persistNosotros({ ...nosotros, historia: historiaEdit })} style={btnOutlineRojo}><Save size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Guardar historia</button>
+      </Seccion>
 
-      <div style={{ fontFamily: "'Alfa Slab One', serif", color: C.rojoOsc, fontSize: 15, marginBottom: 8 }}>Historia (Nosotros)</div>
-      <textarea value={historiaEdit} onChange={(e) => setHistoriaEdit(e.target.value)} rows={4} style={{ ...inputStyle, width: "100%", marginBottom: 8 }} />
-      <button onClick={() => persistNosotros({ ...nosotros, historia: historiaEdit })} style={{ ...btnOutlineRojo, marginBottom: 26 }}><Save size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Guardar historia</button>
+      <Seccion titulo="💵 Cuenta Nequi (pago manual)">
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input value={cfgEdit.nequiCuenta} onChange={(e) => setCfgEdit({ ...cfgEdit, nequiCuenta: e.target.value })} style={inputStyle} placeholder="Número Nequi" />
+          <input value={cfgEdit.nequiTitular} onChange={(e) => setCfgEdit({ ...cfgEdit, nequiTitular: e.target.value })} style={inputStyle} placeholder="Titular" />
+          <button onClick={() => persistConfig(cfgEdit)} style={btnOutlineRojo}><Save size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Guardar</button>
+        </div>
+      </Seccion>
 
-      <div style={{ fontFamily: "'Alfa Slab One', serif", color: C.rojoOsc, fontSize: 15, marginBottom: 8 }}>Cuenta Nequi (pago manual)</div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
-        <input value={cfgEdit.nequiCuenta} onChange={(e) => setCfgEdit({ ...cfgEdit, nequiCuenta: e.target.value })} style={inputStyle} placeholder="Número Nequi" />
-        <input value={cfgEdit.nequiTitular} onChange={(e) => setCfgEdit({ ...cfgEdit, nequiTitular: e.target.value })} style={inputStyle} placeholder="Titular" />
-        <button onClick={() => persistConfig(cfgEdit)} style={btnOutlineRojo}><Save size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Guardar</button>
-      </div>
+      <Seccion titulo="🔑 Llave Bre-B (pago manual, cualquier banco)">
+        <p style={{ fontSize: 12, color: "#777", marginBottom: 8 }}>
+          La llave se crea gratis desde la app de tu banco (Bancolombia, Nequi, etc.) — sección Bre-B. Puede ser tu celular, NIT o una llave alfanumérica.
+        </p>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input value={cfgEdit.llaveBreB || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, llaveBreB: e.target.value })} style={inputStyle} placeholder="Llave Bre-B" />
+          <input value={cfgEdit.llaveTitular || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, llaveTitular: e.target.value })} style={inputStyle} placeholder="Titular" />
+          <button onClick={() => persistConfig(cfgEdit)} style={btnOutlineRojo}><Save size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Guardar</button>
+        </div>
+      </Seccion>
 
-      <div style={{ fontFamily: "'Alfa Slab One', serif", color: C.rojoOsc, fontSize: 15, marginBottom: 8 }}>Llave Bre-B (pago manual, cualquier banco)</div>
-      <p style={{ fontSize: 12, color: "#777", marginBottom: 8 }}>
-        La llave se crea gratis desde la app de tu banco (Bancolombia, Nequi, etc.) — sección Bre-B. Puede ser tu celular, NIT o una llave alfanumérica.
-      </p>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 26 }}>
-        <input value={cfgEdit.llaveBreB || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, llaveBreB: e.target.value })} style={inputStyle} placeholder="Llave Bre-B" />
-        <input value={cfgEdit.llaveTitular || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, llaveTitular: e.target.value })} style={inputStyle} placeholder="Titular" />
-        <button onClick={() => persistConfig(cfgEdit)} style={btnOutlineRojo}><Save size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Guardar</button>
-      </div>
+      <Seccion titulo="✉️ Avisos por correo (EmailJS)">
+        <p style={{ fontSize: 12, color: "#777", marginBottom: 8 }}>
+          Se manda un correo al staff cuando alguien reporta una transferencia, y al cliente cuando reporta el pago y cuando se confirma. Creá una cuenta gratis en emailjs.com, conectá tu correo, armá una plantilla con las variables to_email, to_name, subject y message, y pegá acá los 3 códigos.
+        </p>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+          <input value={cfgEdit.staffEmail || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, staffEmail: e.target.value })} style={inputStyle} placeholder="Correo del staff (recibe avisos de pago)" />
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input value={cfgEdit.emailjsServiceId || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, emailjsServiceId: e.target.value })} style={inputStyle} placeholder="Service ID" />
+          <input value={cfgEdit.emailjsTemplateId || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, emailjsTemplateId: e.target.value })} style={inputStyle} placeholder="Template ID" />
+          <input value={cfgEdit.emailjsPublicKey || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, emailjsPublicKey: e.target.value })} style={inputStyle} placeholder="Public Key" />
+          <button onClick={() => persistConfig(cfgEdit)} style={btnOutlineRojo}><Save size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Guardar</button>
+        </div>
+      </Seccion>
 
-      <div style={{ fontFamily: "'Alfa Slab One', serif", color: C.rojoOsc, fontSize: 15, marginBottom: 8 }}>Avisos por correo (EmailJS)</div>
-      <p style={{ fontSize: 12, color: "#777", marginBottom: 8 }}>
-        Se manda un correo al staff cuando alguien reporta una transferencia, y al cliente cuando reporta el pago y cuando se confirma. Creá una cuenta gratis en emailjs.com, conectá tu correo, armá una plantilla con las variables to_email, to_name, subject y message, y pegá acá los 3 códigos.
-      </p>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-        <input value={cfgEdit.staffEmail || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, staffEmail: e.target.value })} style={inputStyle} placeholder="Correo del staff (recibe avisos de pago)" />
-      </div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 26 }}>
-        <input value={cfgEdit.emailjsServiceId || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, emailjsServiceId: e.target.value })} style={inputStyle} placeholder="Service ID" />
-        <input value={cfgEdit.emailjsTemplateId || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, emailjsTemplateId: e.target.value })} style={inputStyle} placeholder="Template ID" />
-        <input value={cfgEdit.emailjsPublicKey || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, emailjsPublicKey: e.target.value })} style={inputStyle} placeholder="Public Key" />
-        <button onClick={() => persistConfig(cfgEdit)} style={btnOutlineRojo}><Save size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Guardar</button>
-      </div>
-
-      <div style={{ fontFamily: "'Alfa Slab One', serif", color: C.rojoOsc, fontSize: 15, marginBottom: 8 }}>Pago automático (Wompi)</div>
-      <p style={{ fontSize: 12, color: "#777", marginBottom: 8 }}>
-        Pegá acá la llave pública de tu cuenta Wompi (empieza con pub_test_ o pub_prod_) para habilitar el botón "Pagar ahora" con Nequi, PSE o tarjeta sin intervención humana.
-        Se crea gratis en el panel de comercio de Wompi.
-      </p>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <input value={cfgEdit.wompiPublicKey || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, wompiPublicKey: e.target.value })} style={{ ...inputStyle, width: 260 }} placeholder="pub_prod_xxxxxxxx" />
-        <button onClick={() => persistConfig(cfgEdit)} style={btnOutlineRojo}><Save size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Guardar</button>
-      </div>
+      <Seccion titulo="💳 Pago automático (Wompi)">
+        <p style={{ fontSize: 12, color: "#777", marginBottom: 8 }}>
+          Pegá acá la llave pública de tu cuenta Wompi (empieza con pub_test_ o pub_prod_) para habilitar el botón "Pagar ahora" con Nequi, PSE o tarjeta sin intervención humana.
+          Se crea gratis en el panel de comercio de Wompi.
+        </p>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input value={cfgEdit.wompiPublicKey || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, wompiPublicKey: e.target.value })} style={{ ...inputStyle, width: 260 }} placeholder="pub_prod_xxxxxxxx" />
+          <button onClick={() => persistConfig(cfgEdit)} style={btnOutlineRojo}><Save size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Guardar</button>
+        </div>
+      </Seccion>
     </div>
   );
 }
@@ -1533,8 +1704,15 @@ function Footer({ setTab }) {
   return (
     <footer style={{ background: C.negro, color: C.crema, padding: "26px 16px", textAlign: "center", fontSize: 12 }}>
       <div style={{ display: "flex", gap: 18, justifyContent: "center", marginBottom: 10, flexWrap: "wrap" }}>
-        <span style={{ display: "flex", alignItems: "center", gap: 6 }}><MapPin size={14} /> Ubicación a confirmar</span>
-        <span style={{ display: "flex", alignItems: "center", gap: 6 }}><Phone size={14} /> WhatsApp por reservas</span>
+        <a href="https://maps.app.goo.gl/YnrGcjXVVgXcVKPM8" target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 6, color: C.crema, textDecoration: "none" }}>
+          <MapPin size={14} /> Cómo llegar
+        </a>
+        <a href="https://wa.me/573159262373" target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 6, color: C.crema, textDecoration: "none" }}>
+          <Phone size={14} /> +57 315 9262373
+        </a>
+        <a href="https://wa.me/573243295813" target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 6, color: C.crema, textDecoration: "none" }}>
+          <Phone size={14} /> +57 324 3295813
+        </a>
         <span style={{ display: "flex", alignItems: "center", gap: 6 }}><Instagram size={14} /> @los4decopas</span>
       </div>
       <div style={{ opacity: 0.6 }}>La Gran Peña Los 4 de Copas — hecho con fileteado porteño y orgullo argentino</div>
