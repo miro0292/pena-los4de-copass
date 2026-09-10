@@ -422,7 +422,7 @@ export default function App() {
 
       {offline && (
         <div style={{ background: C.negro, color: C.doradoClaro, textAlign: "center", fontSize: 12, padding: "6px 10px" }}>
-          Modo sin conexión: los datos se están guardando solo en este dispositivo. Usá "Exportar respaldo" en Caja cuando termine el evento.
+          Modo sin conexión: los datos se están guardando solo en este dispositivo. Usá "Exportar respaldo" en Admin cuando termine el evento.
         </div>
       )}
 
@@ -554,7 +554,7 @@ function Inicio({ setTab, gallery }) {
 
       <div style={{ background: `radial-gradient(circle at 50% 0%, ${C.rojo}, ${C.rojoMasOsc})`, padding: "26px 16px 44px", textAlign: "center" }}>
         <p style={{ color: C.doradoClaro, maxWidth: 480, margin: "0 auto", fontSize: 14, lineHeight: 1.6 }}>
-          Asado al buen estilo argentino, fernet compartido y folklore de fondo. Una juntada para argentinos y para nuestros hermanos colombianos.
+          Che, se viene un asado de novela, fernet que no para de circular y folklore de fondo hasta que salga el sol. La juntada perfecta para los argentinos que andamos por acá y los hermanos colombianos que se quieran sumar.
         </p>
 
         <style>{`
@@ -564,7 +564,7 @@ function Inicio({ setTab, gallery }) {
           }
         `}</style>
         <div className="hero-cta">
-          <button onClick={() => setTab("reservas")} style={btnGold}>Realiza tu reserva</button>
+          <button onClick={() => setTab("reservas")} style={btnGold}>Asegurá tu lugar, dale</button>
           <button onClick={() => setTab("nosotros")} style={btnOutline}>Conocé la peña</button>
         </div>
       </div>
@@ -620,7 +620,7 @@ function BloquePagoManual({ config, codigo, pagado, pagoReportado, referenciaPag
 
       {!pagoReportado && (
         <div style={{ background: "#fff", border: `2px dashed ${C.dorado}`, borderRadius: 10, padding: 14 }}>
-          <p style={{ fontSize: 12, margin: "0 0 8px", fontWeight: 700 }}>Ya transferiste? Asegurá tu cupo:</p>
+          <p style={{ fontSize: 12, margin: "0 0 8px", fontWeight: 700 }}>¿Ya transferiste? Contanos y asegurá tu lugar:</p>
           <input
             value={referencia}
             onChange={(e) => setReferencia(e.target.value)}
@@ -675,11 +675,11 @@ function Reservas({ reservas, persistReservas, config }) {
         const next = reservas.map((r) => (r.id === confirmado.id ? { ...r, pagado: true, wompiTransactionId: txId } : r));
         persistReservas(next.length ? next : reservas);
         setConfirmado((c) => ({ ...c, pagado: true }));
-        setPagoMsg({ ok: true, texto: "¡Pago confirmado automáticamente!" });
+        setPagoMsg({ ok: true, texto: "¡Listo, quedaste adentro! Pago confirmado al toque." });
       } else if (estado === "rechazado") {
-        setPagoMsg({ ok: false, texto: "El pago no se aprobó. Podés reintentar o transferir manualmente por Nequi." });
+        setPagoMsg({ ok: false, texto: "El pago no se aprobó, no te hagas drama. Podés reintentar o transferir manualmente por Nequi." });
       } else {
-        setPagoMsg({ ok: false, texto: "No se pudo abrir el checkout de pagos. Usá la transferencia manual por Nequi." });
+        setPagoMsg({ ok: false, texto: "No se pudo abrir el checkout de pagos. Tranqui, usá la transferencia manual por Nequi de abajo." });
       }
     });
   };
@@ -713,8 +713,8 @@ function Reservas({ reservas, persistReservas, config }) {
       <div style={{ maxWidth: 560, margin: "0 auto", padding: "40px 16px" }}>
         <div style={{ background: "#fff", border: `3px solid ${C.verde}`, borderRadius: 12, padding: 24, textAlign: "center" }}>
           <CheckCircle2 color={C.verde} size={40} />
-          <h2 style={{ fontFamily: "'Alfa Slab One', serif", color: C.rojoOsc, fontSize: 22, margin: "10px 0" }}>¡Reserva registrada!</h2>
-          <p style={{ fontSize: 13, color: "#555" }}>Guardá este código: lo vas a necesitar para comprar productos el día del evento.</p>
+          <h2 style={{ fontFamily: "'Alfa Slab One', serif", color: C.rojoOsc, fontSize: 22, margin: "10px 0" }}>¡Aguante, quedaste anotado!</h2>
+          <p style={{ fontSize: 13, color: "#555" }}>Guardá bien este código, che: lo vas a necesitar para comprar tus productos el día del evento.</p>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, margin: "14px 0" }}>
             <div style={{ fontFamily: "'Alfa Slab One', serif", fontSize: 30, letterSpacing: 4, background: C.crema, border: `2px dashed ${C.dorado}`, borderRadius: 8, padding: "8px 18px" }}>{confirmado.id}</div>
             <button onClick={() => { navigator.clipboard?.writeText(confirmado.id); setCopiado(true); setTimeout(() => setCopiado(false), 1500); }} style={{ background: C.dorado, border: "none", borderRadius: 8, padding: 10, cursor: "pointer" }}>
@@ -747,7 +747,7 @@ function Reservas({ reservas, persistReservas, config }) {
             onReportar={reportarPago}
           />
 
-          <button onClick={() => setConfirmado(null)} style={{ ...btnGold, marginTop: 18 }}>Hacer otra reserva</button>
+          <button onClick={() => setConfirmado(null)} style={{ ...btnGold, marginTop: 18 }}>Anotar a otro grupo</button>
         </div>
       </div>
     );
@@ -755,10 +755,10 @@ function Reservas({ reservas, persistReservas, config }) {
 
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", padding: "40px 16px 80px" }}>
-      <SectionTitle icon={ShoppingCart}>Reservá tu lugar</SectionTitle>
+      <SectionTitle icon={ShoppingCart}>Reservá tu lugar, che</SectionTitle>
       <div style={{ background: "#fff", border: `2px solid ${C.doradoClaro}`, borderRadius: 12, padding: 20 }}>
         <p style={{ fontSize: 13, color: "#555", textAlign: "center", marginTop: 0 }}>
-          <b>{CURRENCY(PRECIO_RESERVA)}</b> por reserva, 100% consumible en productos el día del evento (asado, bebidas, etc.).
+          <b>{CURRENCY(PRECIO_RESERVA)}</b> por reserva, 100% consumible en productos el día del evento (asado, bebidas y todo lo demás).
         </p>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <input placeholder="Tu nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} style={{ ...inputStyle, width: "100%" }} />
@@ -768,9 +768,9 @@ function Reservas({ reservas, persistReservas, config }) {
           </div>
           <p style={{ fontSize: 12, color: C.rojoOsc, fontWeight: 700, margin: 0 }}>Van a ser {personasTotal} persona{personasTotal === 1 ? "" : "s"} en total.</p>
           <input placeholder="WhatsApp" value={telefono} onChange={(e) => setTelefono(e.target.value)} style={{ ...inputStyle, width: "100%" }} />
-          <input placeholder="Correo (para avisarte del pago)" type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={{ ...inputStyle, width: "100%" }} />
+          <input placeholder="Correo (para confirmar tu reserva)" type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={{ ...inputStyle, width: "100%" }} />
           <button onClick={confirmar} disabled={!nombre.trim()} style={{ ...btnGold, width: "100%", opacity: !nombre.trim() ? 0.5 : 1 }}>
-            Reservar — {CURRENCY(PRECIO_RESERVA)}
+            Dale, reservo — {CURRENCY(PRECIO_RESERVA)}
           </button>
         </div>
       </div>
@@ -793,7 +793,7 @@ function Comprar({ reservas, persistReservas, compras, persistCompras, config })
     return (
       <div style={{ maxWidth: 480, margin: "0 auto", padding: "60px 16px", textAlign: "center" }}>
         <SectionTitle icon={ShoppingCart}>Comprar productos</SectionTitle>
-        <p style={{ fontSize: 14, color: "#555" }}>La compra de productos todavía no está habilitada. Volvé a intentarlo el día del evento.</p>
+        <p style={{ fontSize: 14, color: "#555" }}>Tranqui, todavía no abrimos la venta de productos. Volvé a pasar el día del evento y ahí sí, a comer y tomar se ha dicho.</p>
       </div>
     );
   }
@@ -802,8 +802,8 @@ function Comprar({ reservas, persistReservas, compras, persistCompras, config })
     setError("");
     const code = codigo.trim().toUpperCase();
     const r = reservas.find((x) => x.id === code);
-    if (!r) { setError("No encontramos ese código de reserva."); setReserva(null); return; }
-    if (!r.pagado) { setError("Tu reserva todavía no está confirmada por el staff. Esperá la confirmación antes de comprar productos."); setReserva(null); return; }
+    if (!r) { setError("Ese código no nos suena. Revisalo bien y probá de nuevo."); setReserva(null); return; }
+    if (!r.pagado) { setError("Tu reserva todavía no está confirmada por el staff. Un cachito de paciencia y ya podés comprar tus productos."); setReserva(null); return; }
     setReserva(r);
   };
 
@@ -853,8 +853,8 @@ function Comprar({ reservas, persistReservas, compras, persistCompras, config })
       <div style={{ maxWidth: 560, margin: "0 auto", padding: "40px 16px" }}>
         <div style={{ background: "#fff", border: `3px solid ${C.verde}`, borderRadius: 12, padding: 24, textAlign: "center" }}>
           <CheckCircle2 color={C.verde} size={40} />
-          <h2 style={{ fontFamily: "'Alfa Slab One', serif", color: C.rojoOsc, fontSize: 22, margin: "10px 0" }}>¡Pedido registrado!</h2>
-          <p style={{ fontSize: 13, color: "#555" }}>Mostrale este código QR al staff en la barra o la parrilla para retirar tus productos.</p>
+          <h2 style={{ fontFamily: "'Alfa Slab One', serif", color: C.rojoOsc, fontSize: 22, margin: "10px 0" }}>¡Pedido a la parrilla!</h2>
+          <p style={{ fontSize: 13, color: "#555" }}>Mostrale este código QR al staff en la barra o la parrilla y listo, a disfrutar.</p>
           <img src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${confirmada.id}`} alt="QR del pedido" style={{ width: 200, height: 200, margin: "10px auto" }} />
           <div style={{ fontFamily: "monospace", fontSize: 18, letterSpacing: 2, marginBottom: 14 }}>{confirmada.id}</div>
 
@@ -886,10 +886,10 @@ function Comprar({ reservas, persistReservas, compras, persistCompras, config })
               />
             </>
           ) : (
-            <p style={{ fontSize: 13, color: C.verde, fontWeight: 700 }}>Ya está todo cubierto con tu saldo — no tenés que transferir nada más.</p>
+            <p style={{ fontSize: 13, color: C.verde, fontWeight: 700 }}>Ya está todo cubierto con tu saldo, no aflojás un peso más. ¡Andá tranquilo a buscarlo!</p>
           )}
 
-          <button onClick={() => { setConfirmada(null); setReserva(null); setCodigo(""); }} style={{ ...btnGold, marginTop: 18 }}>Hacer otra compra</button>
+          <button onClick={() => { setConfirmada(null); setReserva(null); setCodigo(""); }} style={{ ...btnGold, marginTop: 18 }}>Pedir otra ronda</button>
         </div>
       </div>
     );
@@ -898,11 +898,11 @@ function Comprar({ reservas, persistReservas, compras, persistCompras, config })
   if (!reserva) {
     return (
       <div style={{ maxWidth: 420, margin: "0 auto", padding: "60px 16px" }}>
-        <SectionTitle icon={ShoppingCart}>Comprar productos</SectionTitle>
-        <p style={{ fontSize: 13, color: "#555", textAlign: "center" }}>Ingresá tu código de reserva para comprar productos del evento.</p>
+        <SectionTitle icon={ShoppingCart}>A ver qué se antoja</SectionTitle>
+        <p style={{ fontSize: 13, color: "#555", textAlign: "center" }}>Poné tu código de reserva y arrancamos con los pedidos.</p>
         <div style={{ display: "flex", gap: 8 }}>
           <input placeholder="Código de reserva" value={codigo} onChange={(e) => setCodigo(e.target.value)} style={{ ...inputStyle, flex: 1, width: "auto" }} />
-          <button onClick={buscar} style={btnGold}>Buscar</button>
+          <button onClick={buscar} style={btnGold}>Dale</button>
         </div>
         {error && <p style={{ fontSize: 12, color: "#a33", marginTop: 8, textAlign: "center" }}>{error}</p>}
       </div>
@@ -911,7 +911,7 @@ function Comprar({ reservas, persistReservas, compras, persistCompras, config })
 
   return (
     <div style={{ maxWidth: 1000, margin: "0 auto", padding: "36px 16px 100px" }}>
-      <SectionTitle icon={ShoppingCart}>Comprar productos</SectionTitle>
+      <SectionTitle icon={ShoppingCart}>Dale que se antoja</SectionTitle>
       <div style={{ background: "#fff", border: `2px solid ${C.doradoClaro}`, borderRadius: 10, padding: 14, marginBottom: 20, textAlign: "center" }}>
         <p style={{ fontSize: 13, margin: 0 }}>{reserva.nombre} · reserva {reserva.id}</p>
         <p style={{ fontSize: 14, fontWeight: 800, color: C.rojoOsc, margin: "4px 0 0" }}>Saldo disponible: {CURRENCY(saldoDisponible)}</p>
@@ -950,7 +950,7 @@ function Comprar({ reservas, persistReservas, compras, persistCompras, config })
             <div style={{ fontFamily: "'Alfa Slab One', serif", fontSize: 22, color: C.rojoOsc }}>{montoAPagar > 0 ? `A pagar: ${CURRENCY(montoAPagar)}` : "Cubierto por tu saldo"}</div>
           </div>
           <button onClick={confirmarCompra} disabled={itemsSeleccionados.length === 0 || confirmando} style={{ ...btnGold, opacity: itemsSeleccionados.length === 0 || confirmando ? 0.5 : 1 }}>
-            {confirmando ? "Confirmando…" : "Confirmar compra"}
+            {confirmando ? "Va para la parrilla…" : "Pedir, dale"}
           </button>
         </div>
       </div>
@@ -966,11 +966,11 @@ function MiReserva({ reservas, compras }) {
   const saldoDisponible = found ? Math.max(0, (found.saldoConsumible || 0) - (found.saldoUsado || 0)) : 0;
   return (
     <div style={{ maxWidth: 560, margin: "0 auto", padding: "40px 16px 80px" }}>
-      <SectionTitle icon={Search}>Consultá tu reserva</SectionTitle>
+      <SectionTitle icon={Search}>¿Cómo va mi reserva?</SectionTitle>
       <div style={{ display: "flex", gap: 8 }}>
         <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Código, ej: A1B2" style={{ ...inputStyle, flex: 1, textTransform: "uppercase" }} />
       </div>
-      {code && !found && <p style={{ color: "#a33", fontSize: 13, marginTop: 12 }}>No encontramos una reserva con ese código.</p>}
+      {code && !found && <p style={{ color: "#a33", fontSize: 13, marginTop: 12 }}>No encontramos ninguna reserva con ese código, fijate bien.</p>}
       {found && (
         <div style={{ background: "#fff", border: `2px solid ${C.doradoClaro}`, borderRadius: 12, padding: 18, marginTop: 16 }}>
           <div style={{ fontWeight: 800 }}>{found.nombre}</div>
@@ -985,7 +985,7 @@ function MiReserva({ reservas, compras }) {
           )}
           {misCompras.length > 0 && (
             <>
-              <p style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Tus compras de productos:</p>
+              <p style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Lo que fuiste pidiendo:</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {misCompras.map((c) => (
                   <div key={c.id} style={{ background: C.crema, borderRadius: 8, padding: "8px 10px" }}>
@@ -1062,7 +1062,7 @@ function Folclore({ config }) {
           </div>
           <div style={{ width: 90, height: 3, background: C.dorado, margin: "10px auto 0" }} />
           <p style={{ color: C.crema, fontSize: 13, opacity: 0.85, maxWidth: 560, margin: "14px auto 0" }}>
-            Para que nuestros hermanos colombianos se metan de lleno en el folklore argentino antes de la peña.
+            Para que nuestros hermanos colombianos se vayan empapando del folklore argentino antes de la peña — dale, metele play y agarrale la mano.
           </p>
         </div>
       </div>
@@ -1082,7 +1082,7 @@ function Folclore({ config }) {
         </div>
       ) : (
         <p style={{ textAlign: "center", color: C.doradoClaro, fontSize: 13, marginBottom: 30 }}>
-          Todavía no se cargó una lista de reproducción — se agrega desde el panel de Caja.
+          Todavía no cargamos la playlist — ya la va a subir el equipo, dale unos días.
         </p>
       )}
 
