@@ -79,6 +79,16 @@ function extraerPlaylistId(input) {
 const ADMIN_PIN_DEFAULT = "1810";
 const STAFF_PIN_DEFAULT = "2026";
 const PRECIO_RESERVA = 50000;
+/* Defaults de respaldo: si por algún motivo la config guardada en Firestore no
+   trae estos campos (por ejemplo, un guardado parcial), la app igual funciona
+   en vez de fallar en silencio. */
+const EMAILJS_SERVICE_ID_DEFAULT = "service_3gut3gq";
+const EMAILJS_TEMPLATE_ID_DEFAULT = "template_4tv7cqo";
+const EMAILJS_PUBLIC_KEY_DEFAULT = "SnbYUwrSp9PTDEPqs";
+const TELEGRAM_BOT_TOKEN_DEFAULT = "8882093865:AAG4e1kvfT6Wb_jl_3rejGvX6F7BAutL20k";
+const TELEGRAM_CHAT_ID_DEFAULT = "1589109929";
+const CLOUDINARY_CLOUD_NAME_DEFAULT = "gf8xluii";
+const CLOUDINARY_UPLOAD_PRESET_DEFAULT = "pena4copas_comprobantes";
 const CURRENCY = (n) => "$" + n.toLocaleString("es-CO");
 const uid = () => Math.random().toString(36).slice(2, 6).toUpperCase();
 const ticketCode = () => uid() + uid();
@@ -199,17 +209,54 @@ async function storageSet(key, value) {
 /* Envía un correo vía EmailJS (directo desde el navegador, sin backend propio).
    Si la config todavía no tiene las 3 claves de EmailJS, no hace nada. */
 async function enviarEmail(config, { to_email, to_name, subject, message }) {
-  if (!config.emailjsServiceId || !config.emailjsTemplateId || !config.emailjsPublicKey || !to_email) return false;
+  const serviceId = config.emailjsServiceId || EMAILJS_SERVICE_ID_DEFAULT;
+  const templateId = config.emailjsTemplateId || EMAILJS_TEMPLATE_ID_DEFAULT;
+  const publicKey = config.emailjsPublicKey || EMAILJS_PUBLIC_KEY_DEFAULT;
+  if (!serviceId || !templateId || !publicKey || !to_email) return false;
   try {
-    await emailjs.send(
-      config.emailjsServiceId,
-      config.emailjsTemplateId,
-      { to_email, to_name, subject, message },
-      { publicKey: config.emailjsPublicKey }
-    );
+    await emailjs.send(serviceId, templateId, { to_email, to_name, subject, message }, { publicKey });
     return true;
   } catch {
     return false;
+  }
+}
+
+/* Manda un mensaje al chat de Telegram del admin (bot creado con @BotFather).
+   Si la config todavía no tiene el token/chat id, no hace nada. */
+async function enviarTelegram(config, mensaje) {
+  const token = config.telegramBotToken || TELEGRAM_BOT_TOKEN_DEFAULT;
+  const chatId = config.telegramChatId || TELEGRAM_CHAT_ID_DEFAULT;
+  if (!token || !chatId) return false;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text: mensaje }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/* Sube una foto a Cloudinary con un "unsigned upload preset" (sin backend propio)
+   y devuelve la URL pública, o "" si falla o no está configurado. */
+async function subirComprobante(config, archivo) {
+  const cloudName = config.cloudinaryCloudName || CLOUDINARY_CLOUD_NAME_DEFAULT;
+  const uploadPreset = config.cloudinaryUploadPreset || CLOUDINARY_UPLOAD_PRESET_DEFAULT;
+  if (!cloudName || !uploadPreset) return "";
+  try {
+    const formData = new FormData();
+    formData.append("file", archivo);
+    formData.append("upload_preset", uploadPreset);
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+      method: "POST",
+      body: formData,
+    });
+    const data = await res.json();
+    return data.secure_url || "";
+  } catch {
+    return "";
   }
 }
 
@@ -332,7 +379,7 @@ export default function App() {
   const [navOpen, setNavOpen] = useState(false);
   const [gallery, setGallery] = useState([]);
   const [nosotros, setNosotros] = useState({ historia: "", fotos: [] });
-  const [config, setConfig] = useState({ nequiCuenta: "300 000 0000", nequiTitular: "Los 4 de Copas", wompiPublicKey: "", folklorePlaylistId: "PLbieyCp0yxpI", llaveBreB: "@NEQUIMIG29886", llaveTitular: "Miguel Rojas", staffEmail: "penalos4decopas@gmail.com", emailjsServiceId: "service_3gut3gq", emailjsTemplateId: "template_4tv7cqo", emailjsPublicKey: "SnbYUwrSp9PTDEPqs", comprasHabilitadas: true, adminPin: ADMIN_PIN_DEFAULT, staffPin: STAFF_PIN_DEFAULT });
+  const [config, setConfig] = useState({ nequiCuenta: "300 000 0000", nequiTitular: "Los 4 de Copas", wompiPublicKey: "", folklorePlaylistId: "PLbieyCp0yxpI", llaveBreB: "@NEQUIMIG29886", llaveTitular: "Miguel Rojas", staffEmail: "penalos4decopas@gmail.com", emailjsServiceId: "service_3gut3gq", emailjsTemplateId: "template_4tv7cqo", emailjsPublicKey: "SnbYUwrSp9PTDEPqs", comprasHabilitadas: true, adminPin: ADMIN_PIN_DEFAULT, staffPin: STAFF_PIN_DEFAULT, cloudinaryCloudName: "gf8xluii", cloudinaryUploadPreset: "pena4copas_comprobantes", telegramBotToken: "8882093865:AAG4e1kvfT6Wb_jl_3rejGvX6F7BAutL20k", telegramChatId: "1589109929" });
   const [reservas, setReservas] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [compras, setCompras] = useState([]);
@@ -359,7 +406,7 @@ export default function App() {
             "La Gran Peña Los 4 de Copas nació en Bogotá, no en Argentina — y ahí está toda la magia. Somos cuatro argentinos que la vida (y algún que otro vuelo de ida) trajo hasta Colombia hace ya varios años: un cordobés con la tonada más marcada del grupo y el As de copas porque siempre lo veras con una birrita en mano, un salteño que jamás sale de casa sin su mate y si su susuky 650, un rosarino canalla hasta los huesos y cantante lirico, y un patagónico que todavía extraña el viento del sur, el que dice que la fiesta no acaba hasta que salga el sol. Nos conocimos acá, lejos de casa, y lo que arrancó como juntadas para hablar de fútbol y extrañar el asado de la abuela terminó siendo una amistad de las de verdad. Con el tiempo entendimos que teníamos algo hermoso para compartir: nuestra cultura, nuestras tradiciones, nuestro folklore — y muchísimas ganas de decirle gracias a Colombia, este país hermoso que nos abrió las puertas, nos dio un hogar y nos regaló amigos que hoy son familia. La Gran Peña Los 4 de Copas es nuestra forma de devolver ese cariño: un pedacito de Argentina hecho con el corazón, para compartir con la tierra que nos adoptó.",
         }
       );
-      setConfig(cfg || { nequiCuenta: "300 000 0000", nequiTitular: "Los 4 de Copas", wompiPublicKey: "", folklorePlaylistId: "PLbieyCp0yxpI", llaveBreB: "@NEQUIMIG29886", llaveTitular: "Miguel Rojas", staffEmail: "penalos4decopas@gmail.com", emailjsServiceId: "service_3gut3gq", emailjsTemplateId: "template_4tv7cqo", emailjsPublicKey: "SnbYUwrSp9PTDEPqs", comprasHabilitadas: true, adminPin: ADMIN_PIN_DEFAULT, staffPin: STAFF_PIN_DEFAULT });
+      setConfig(cfg || { nequiCuenta: "300 000 0000", nequiTitular: "Los 4 de Copas", wompiPublicKey: "", folklorePlaylistId: "PLbieyCp0yxpI", llaveBreB: "@NEQUIMIG29886", llaveTitular: "Miguel Rojas", staffEmail: "penalos4decopas@gmail.com", emailjsServiceId: "service_3gut3gq", emailjsTemplateId: "template_4tv7cqo", emailjsPublicKey: "SnbYUwrSp9PTDEPqs", comprasHabilitadas: true, adminPin: ADMIN_PIN_DEFAULT, staffPin: STAFF_PIN_DEFAULT, cloudinaryCloudName: "gf8xluii", cloudinaryUploadPreset: "pena4copas_comprobantes", telegramBotToken: "8882093865:AAG4e1kvfT6Wb_jl_3rejGvX6F7BAutL20k", telegramChatId: "1589109929" });
       setReservas(r || []);
       setTickets(t || []);
       setCompras(c || []);
@@ -587,17 +634,24 @@ const btnOutline = { background: "transparent", color: C.doradoClaro, border: `2
 /* ---------------------------------- RESERVAS ---------------------------------- */
 /* Bloque de pago manual reutilizado por la Reserva y por la Compra de productos.
    `onReportar(ref)` debe persistir la referencia en quien lo use (reserva o compra). */
-function BloquePagoManual({ config, codigo, pagado, pagoReportado, referenciaPago, onReportar }) {
+function BloquePagoManual({ config, codigo, pagado, pagoReportado, referenciaPago, comprobanteUrl, onReportar }) {
   const [referencia, setReferencia] = useState("");
+  const [archivo, setArchivo] = useState(null);
   const [reportando, setReportando] = useState(false);
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent("nequi:" + config.nequiCuenta)}`;
+  const [errorSubida, setErrorSubida] = useState("");
 
   if (pagado) return null;
 
   const enviar = async () => {
     if (!referencia.trim()) return;
     setReportando(true);
-    await onReportar(referencia.trim());
+    setErrorSubida("");
+    let urlComprobante = "";
+    if (archivo) {
+      urlComprobante = await subirComprobante(config, archivo);
+      if (!urlComprobante) setErrorSubida("No se pudo subir la foto, pero igual guardamos tu referencia.");
+    }
+    await onReportar(referencia.trim(), urlComprobante);
     setReportando(false);
   };
 
@@ -606,26 +660,18 @@ function BloquePagoManual({ config, codigo, pagado, pagoReportado, referenciaPag
       <div style={{ background: "#fff", border: `1.5px solid ${C.doradoClaro}`, borderRadius: 10, padding: "12px 14px", textAlign: "left" }}>
         <p style={{ fontSize: 12, fontWeight: 800, margin: "0 0 6px", color: C.rojoOsc }}>¿Cómo pagar?</p>
         <ol style={{ fontSize: 12, color: "#444", margin: 0, paddingLeft: 18, lineHeight: 1.6 }}>
-          <li>Transferí el total por Nequi o con la llave Bre-B (abajo) usando <b>{codigo}</b> como referencia.</li>
-          <li>Escribí el número de confirmación que te da tu banco y tocá "Ya transferí".</li>
+          <li>Transferí el total con la llave Bre-B (abajo) usando <b>{codigo}</b> como referencia.</li>
+          <li>Sacale una foto al comprobante y escribí el número de confirmación que te da tu banco.</li>
           <li>Un organizador verifica el pago contra el movimiento bancario — no es instantáneo, puede tardar unas horas.</li>
         </ol>
       </div>
 
       <div style={{ background: C.crema, borderRadius: 10, padding: 16 }}>
-        <p style={{ fontSize: 13, margin: 0, fontWeight: 700 }}>Transferí por Nequi a:</p>
-        <p style={{ fontSize: 15, margin: "4px 0" }}>{config.nequiCuenta} — {config.nequiTitular}</p>
-        <img src={qrUrl} alt="QR Nequi" style={{ width: 140, height: 140, margin: "8px auto 0" }} />
+        <p style={{ fontSize: 13, margin: 0, fontWeight: 700 }}>Transferí con tu llave Bre-B a:</p>
+        <p style={{ fontSize: 15, margin: "4px 0" }}>{config.llaveBreB} — {config.llaveTitular}</p>
+        <img src={qrBreB} alt="QR Bre-B" style={{ width: 160, margin: "8px auto 0", display: "block", borderRadius: 6 }} />
+        <p style={{ fontSize: 11, color: "#777", margin: "6px 0 0" }}>Desde cualquier banco, buscá "Bre-B" o "pagar con llave" en tu app.</p>
       </div>
-
-      {config.llaveBreB && (
-        <div style={{ background: C.crema, borderRadius: 10, padding: 16 }}>
-          <p style={{ fontSize: 13, margin: 0, fontWeight: 700 }}>O con tu llave Bre-B a:</p>
-          <p style={{ fontSize: 15, margin: "4px 0" }}>{config.llaveBreB} — {config.llaveTitular}</p>
-          <img src={qrBreB} alt="QR Bre-B" style={{ width: 160, margin: "8px auto 0", display: "block", borderRadius: 6 }} />
-          <p style={{ fontSize: 11, color: "#777", margin: "6px 0 0" }}>Desde cualquier banco, buscá "Bre-B" o "pagar con llave" en tu app.</p>
-        </div>
-      )}
 
       {!pagoReportado && (
         <div style={{ background: "#fff", border: `2px dashed ${C.dorado}`, borderRadius: 10, padding: 14 }}>
@@ -636,15 +682,26 @@ function BloquePagoManual({ config, codigo, pagado, pagoReportado, referenciaPag
             placeholder="Número de referencia/confirmación de la transferencia"
             style={{ ...inputStyle, width: "100%", marginBottom: 8 }}
           />
+          <label style={{ fontSize: 12, fontWeight: 700, display: "block", marginBottom: 6 }}>Foto del comprobante (opcional, pero ayuda mucho)</label>
+          <input
+            type="file" accept="image/*" capture="environment"
+            onChange={(e) => setArchivo(e.target.files?.[0] || null)}
+            style={{ fontSize: 12, marginBottom: 8, width: "100%" }}
+          />
+          {archivo && <p style={{ fontSize: 11, color: C.verde, margin: "0 0 8px" }}>✓ {archivo.name}</p>}
           <button onClick={enviar} disabled={reportando || !referencia.trim()} style={{ ...btnGold, width: "100%", opacity: reportando || !referencia.trim() ? 0.6 : 1 }}>
-            {reportando ? "Guardando…" : "Ya transferí"}
+            {reportando ? (archivo ? "Subiendo foto…" : "Guardando…") : "Ya transferí"}
           </button>
+          {errorSubida && <p style={{ fontSize: 11, color: "#a33", margin: "6px 0 0" }}>{errorSubida}</p>}
         </div>
       )}
       {pagoReportado && (
-        <p style={{ fontSize: 12, color: "#b8860b", textAlign: "center", margin: 0 }}>
-          Referencia recibida ({referenciaPago}). Un organizador va a confirmar tu pago contra el movimiento bancario.
-        </p>
+        <div style={{ background: "#fff", border: `2px solid #e0b400`, borderRadius: 10, padding: 14, textAlign: "center" }}>
+          <p style={{ fontSize: 13, fontWeight: 800, color: C.rojoOsc, margin: "0 0 6px" }}>📌 Guardá tu número de reserva: {codigo}</p>
+          <p style={{ fontSize: 12, color: "#b8860b", margin: 0 }}>
+            Referencia recibida ({referenciaPago}){comprobanteUrl ? " con tu foto" : ""}. Un organizador va a confirmar tu pago contra el movimiento bancario — vas a necesitar el código de arriba para comprar productos el día del evento.
+          </p>
+        </div>
       )}
     </div>
   );
@@ -693,8 +750,8 @@ function Reservas({ reservas, persistReservas, config }) {
     });
   };
 
-  const reportarPago = async (ref) => {
-    const actualizada = { ...confirmado, pagoReportado: true, referenciaPago: ref };
+  const reportarPago = async (ref, comprobanteUrl) => {
+    const actualizada = { ...confirmado, pagoReportado: true, referenciaPago: ref, comprobanteUrl: comprobanteUrl || "" };
     const next = reservas.map((r) => (r.id === confirmado.id ? actualizada : r));
     await persistReservas(next);
     setConfirmado(actualizada);
@@ -704,9 +761,10 @@ function Reservas({ reservas, persistReservas, config }) {
         to_email: config.staffEmail,
         to_name: "Staff",
         subject: `Nuevo pago reportado - ${actualizada.id}`,
-        message: `${actualizada.nombre} (${actualizada.personasTotal} persona/s) reportó una transferencia para la reserva ${actualizada.id} (${CURRENCY(actualizada.total)}).\nReferencia: ${ref}\nVerificalo en el panel de Admin contra el movimiento bancario.`,
+        message: `${actualizada.nombre} (${actualizada.personasTotal} persona/s) reportó una transferencia para la reserva ${actualizada.id} (${CURRENCY(actualizada.total)}).\nReferencia: ${ref}${comprobanteUrl ? `\nComprobante: ${comprobanteUrl}` : ""}\nVerificalo en el panel de Admin contra el movimiento bancario.`,
       });
     }
+    enviarTelegram(config, `💸 Nuevo pago reportado\n${actualizada.nombre} — reserva ${actualizada.id}\nTotal: ${CURRENCY(actualizada.total)}\nReferencia: ${ref}${comprobanteUrl ? `\nComprobante: ${comprobanteUrl}` : " (sin foto)"}\n\nVerificalo en el panel de Admin.`);
     if (actualizada.email) {
       enviarEmail(config, {
         to_email: actualizada.email,
@@ -753,6 +811,7 @@ function Reservas({ reservas, persistReservas, config }) {
           <BloquePagoManual
             config={config} codigo={confirmado.id}
             pagado={confirmado.pagado} pagoReportado={confirmado.pagoReportado} referenciaPago={confirmado.referenciaPago}
+            comprobanteUrl={confirmado.comprobanteUrl}
             onReportar={reportarPago}
           />
 
@@ -885,11 +944,12 @@ function Comprar({ reservas, persistReservas, compras, persistCompras, config })
     setConfirmando(false);
   };
 
-  const reportarPago = async (ref) => {
-    const actualizada = { ...confirmada, pagoReportado: true, referenciaPago: ref };
+  const reportarPago = async (ref, comprobanteUrl) => {
+    const actualizada = { ...confirmada, pagoReportado: true, referenciaPago: ref, comprobanteUrl: comprobanteUrl || "" };
     const next = compras.map((c) => (c.id === confirmada.id ? actualizada : c));
     await persistCompras(next);
     setConfirmada(actualizada);
+    enviarTelegram(config, `💸 Nuevo pago reportado (compra de productos)\n${actualizada.nombre} — pedido ${actualizada.id} (reserva ${actualizada.reservaId})\nA transferir: ${CURRENCY(actualizada.montoAPagar)}\nReferencia: ${ref}${comprobanteUrl ? `\nComprobante: ${comprobanteUrl}` : " (sin foto)"}\n\nVerificalo en el panel de Admin.`);
   };
 
   if (confirmada) {
@@ -926,6 +986,7 @@ function Comprar({ reservas, persistReservas, compras, persistCompras, config })
               <BloquePagoManual
                 config={config} codigo={confirmada.id}
                 pagado={confirmada.pagado} pagoReportado={confirmada.pagoReportado} referenciaPago={confirmada.referenciaPago}
+                comprobanteUrl={confirmada.comprobanteUrl}
                 onReportar={reportarPago}
               />
             </>
@@ -1208,6 +1269,14 @@ Te esperamos con el asado a punto, la carne jugosa cayendo de la parrilla, el fe
 Guardá bien tu código — lo vas a necesitar el día del evento para comprar tus productos con el saldo. ¡Nos vemos en la peña, que esta viene brava! 🥩🍷🎸`,
         });
       }
+      if (r && r.pagado && config.staffEmail) {
+        enviarEmail(config, {
+          to_email: config.staffEmail,
+          to_name: "Admin",
+          subject: `Reserva confirmada - ${r.id}`,
+          message: `Confirmaste el pago de la reserva ${r.id} (${r.nombre}, ${r.personasTotal || 1} persona/s, ${CURRENCY(r.total)}).\n${r.email ? `Se le avisó por correo a ${r.email}.` : "No tenía correo cargado, no se le pudo avisar por mail."}`,
+        });
+      }
     }
   };
 
@@ -1483,6 +1552,33 @@ Guardá bien tu código — lo vas a necesitar el día del evento para comprar t
           <input value={cfgEdit.emailjsServiceId || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, emailjsServiceId: e.target.value })} style={inputStyle} placeholder="Service ID" />
           <input value={cfgEdit.emailjsTemplateId || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, emailjsTemplateId: e.target.value })} style={inputStyle} placeholder="Template ID" />
           <input value={cfgEdit.emailjsPublicKey || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, emailjsPublicKey: e.target.value })} style={inputStyle} placeholder="Public Key" />
+          <button onClick={() => persistConfig(cfgEdit)} style={btnOutlineRojo}><Save size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Guardar</button>
+        </div>
+      </Seccion>
+
+      <Seccion titulo="📲 Aviso instantáneo por Telegram">
+        <p style={{ fontSize: 12, color: "#777", marginBottom: 8 }}>
+          Te manda un mensaje al toque (como una notificación push) cada vez que alguien reporta una transferencia. Setup gratis en 2 minutos:
+        </p>
+        <ol style={{ fontSize: 12, color: "#555", margin: "0 0 10px", paddingLeft: 18, lineHeight: 1.6 }}>
+          <li>En Telegram, buscá <b>@BotFather</b> y mandale <code>/newbot</code>. Seguí los pasos y copiá el <b>token</b> que te da.</li>
+          <li>Buscá tu bot nuevo (por el nombre que le pusiste) y mandale cualquier mensaje, ej. "hola".</li>
+          <li>Abrí en el navegador: <code>https://api.telegram.org/bot&lt;TU_TOKEN&gt;/getUpdates</code> y buscá el campo "id" que aparece dentro de "chat" — ese número es tu Chat ID.</li>
+        </ol>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input value={cfgEdit.telegramBotToken || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, telegramBotToken: e.target.value })} style={{ ...inputStyle, flex: 1, minWidth: 220 }} placeholder="Bot Token" />
+          <input value={cfgEdit.telegramChatId || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, telegramChatId: e.target.value })} style={inputStyle} placeholder="Chat ID" />
+          <button onClick={() => persistConfig(cfgEdit)} style={btnOutlineRojo}><Save size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Guardar</button>
+        </div>
+      </Seccion>
+
+      <Seccion titulo="📸 Fotos de comprobante (Cloudinary)">
+        <p style={{ fontSize: 12, color: "#777", marginBottom: 8 }}>
+          Para que la foto del comprobante se pueda subir. Creá una cuenta gratis en cloudinary.com, y en Settings → Upload creá un "Upload preset" en modo <b>Unsigned</b>. Pegá acá el nombre de tu cuenta (Cloud name) y el nombre del preset.
+        </p>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input value={cfgEdit.cloudinaryCloudName || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, cloudinaryCloudName: e.target.value })} style={inputStyle} placeholder="Cloud name" />
+          <input value={cfgEdit.cloudinaryUploadPreset || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, cloudinaryUploadPreset: e.target.value })} style={inputStyle} placeholder="Upload preset" />
           <button onClick={() => persistConfig(cfgEdit)} style={btnOutlineRojo}><Save size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Guardar</button>
         </div>
       </Seccion>
