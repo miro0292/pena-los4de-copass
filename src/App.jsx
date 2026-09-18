@@ -130,6 +130,33 @@ Registramos tu reserva 📝
 Para asegurar tu cupo, transferí usando el código ${r.id} como referencia y reportalo desde la web (o respondé este mensaje con el número de confirmación). ¡Cualquier duda, escribinos! 🙌`;
 }
 
+/* Arma asunto + cuerpo del correo de confirmación para el cliente,
+   reusado tanto por el envío automático como por el botón manual. */
+function mensajeEmailReserva(r) {
+  const primerNombre = r.nombre.split(" ")[0];
+  const personas = `${r.personasTotal || 1} persona${(r.personasTotal || 1) === 1 ? "" : "s"}`;
+  if (r.pagado) {
+    return {
+      subject: "¡Confirmadísima tu reserva! — La Gran Peña Los 4 de Copas 🇦🇷",
+      message: `¡Aguante, ${primerNombre}! 🔥🇦🇷
+
+Tu lugar en La Gran Peña Los 4 de Copas quedó CONFIRMADO — ya podés ir guardando apetito, porque se viene una junta como Dios manda.
+
+🎟️ Código: ${r.id}
+👥 ${personas}
+💰 Saldo consumible: ${CURRENCY(r.total)} para gastar en productos el día del evento
+
+Te esperamos con el asado a punto, la carne jugosa cayendo de la parrilla, el fernet bien cargado y un río de anécdotas para contar por años. Folklore de fondo, buena gente alrededor y esa previa que ya sabemos cómo termina: entre amigos, sin mirar el reloj.
+
+Guardá bien tu código — lo vas a necesitar el día del evento para comprar tus productos con el saldo. ¡Nos vemos en la peña, que esta viene brava! 🥩🍷🎸`,
+    };
+  }
+  return {
+    subject: "Tu reserva - La Gran Peña Los 4 de Copas",
+    message: `¡Hola ${primerNombre}! 👋 Te escribimos por tu reserva ${r.id} (${personas}, ${CURRENCY(r.total)}) en La Gran Peña Los 4 de Copas.\n${r.pagoReportado ? `Recibimos tu comprobante (ref. ${r.referenciaPago}) y lo estamos verificando.` : "Todavía no vemos tu pago confirmado — transferí usando el código como referencia y reportalo desde la web."}\n¡Cualquier duda, escribinos!`,
+  };
+}
+
 function linkWhatsApp(r) {
   const digits = (r.telefono || "").replace(/\D/g, "");
   const numero = digits.startsWith("57") ? digits : `57${digits}`;
@@ -379,7 +406,7 @@ export default function App() {
   const [navOpen, setNavOpen] = useState(false);
   const [gallery, setGallery] = useState([]);
   const [nosotros, setNosotros] = useState({ historia: "", fotos: [] });
-  const [config, setConfig] = useState({ nequiCuenta: "300 000 0000", nequiTitular: "Los 4 de Copas", wompiPublicKey: "", folklorePlaylistId: "PLbieyCp0yxpI", llaveBreB: "@NEQUIMIG29886", llaveTitular: "Miguel Rojas", staffEmail: "penalos4decopas@gmail.com", emailjsServiceId: "service_3gut3gq", emailjsTemplateId: "template_4tv7cqo", emailjsPublicKey: "SnbYUwrSp9PTDEPqs", comprasHabilitadas: true, adminPin: ADMIN_PIN_DEFAULT, staffPin: STAFF_PIN_DEFAULT, cloudinaryCloudName: "gf8xluii", cloudinaryUploadPreset: "pena4copas_comprobantes", telegramBotToken: "8882093865:AAG4e1kvfT6Wb_jl_3rejGvX6F7BAutL20k", telegramChatId: "1589109929" });
+  const [config, setConfig] = useState({ nequiCuenta: "300 000 0000", nequiTitular: "Los 4 de Copas", wompiPublicKey: "", folklorePlaylistId: "PLbieyCp0yxpI", llaveBreB: "@NEQUIMIG29886", llaveTitular: "Miguel Rojas", staffEmail: "penalos4decopas@gmail.com", emailjsServiceId: "service_3gut3gq", emailjsTemplateId: "template_4tv7cqo", emailjsPublicKey: "SnbYUwrSp9PTDEPqs", comprasHabilitadas: true, adminPin: ADMIN_PIN_DEFAULT, staffPin: STAFF_PIN_DEFAULT, cloudinaryCloudName: "gf8xluii", cloudinaryUploadPreset: "pena4copas_comprobantes", telegramBotToken: "8882093865:AAG4e1kvfT6Wb_jl_3rejGvX6F7BAutL20k", telegramChatId: "1589109929", llaves: [{ id: "legacy", clave: "@NEQUIMIG29886", titular: "Miguel Rojas", qrUrl: "" }] });
   const [reservas, setReservas] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [compras, setCompras] = useState([]);
@@ -406,7 +433,7 @@ export default function App() {
             "La Gran Peña Los 4 de Copas nació en Bogotá, no en Argentina — y ahí está toda la magia. Somos cuatro argentinos que la vida (y algún que otro vuelo de ida) trajo hasta Colombia hace ya varios años: un cordobés con la tonada más marcada del grupo y el As de copas porque siempre lo veras con una birrita en mano, un salteño que jamás sale de casa sin su mate y si su suzuky 650, un rosarino canalla hasta los huesos y cantante lirico, y un patagónico que todavía extraña el viento del sur, el que dice que la fiesta no acaba hasta que salga el sol. Nos conocimos acá, lejos de casa, y lo que arrancó como juntadas para hablar de fútbol y extrañar el asado de la abuela terminó siendo una amistad de las de verdad. Con el tiempo entendimos que teníamos algo hermoso para compartir: nuestra cultura, nuestras tradiciones, nuestro folklore — y muchísimas ganas de decirle gracias a Colombia, este país hermoso que nos abrió las puertas, nos dio un hogar y nos regaló amigos que hoy son familia. La Gran Peña Los 4 de Copas es nuestra forma de devolver ese cariño: un pedacito de Argentina hecho con el corazón, para compartir con la tierra que nos adoptó.",
         }
       );
-      setConfig(cfg || { nequiCuenta: "300 000 0000", nequiTitular: "Los 4 de Copas", wompiPublicKey: "", folklorePlaylistId: "PLbieyCp0yxpI", llaveBreB: "@NEQUIMIG29886", llaveTitular: "Miguel Rojas", staffEmail: "penalos4decopas@gmail.com", emailjsServiceId: "service_3gut3gq", emailjsTemplateId: "template_4tv7cqo", emailjsPublicKey: "SnbYUwrSp9PTDEPqs", comprasHabilitadas: true, adminPin: ADMIN_PIN_DEFAULT, staffPin: STAFF_PIN_DEFAULT, cloudinaryCloudName: "gf8xluii", cloudinaryUploadPreset: "pena4copas_comprobantes", telegramBotToken: "8882093865:AAG4e1kvfT6Wb_jl_3rejGvX6F7BAutL20k", telegramChatId: "1589109929" });
+      setConfig(cfg || { nequiCuenta: "300 000 0000", nequiTitular: "Los 4 de Copas", wompiPublicKey: "", folklorePlaylistId: "PLbieyCp0yxpI", llaveBreB: "@NEQUIMIG29886", llaveTitular: "Miguel Rojas", staffEmail: "penalos4decopas@gmail.com", emailjsServiceId: "service_3gut3gq", emailjsTemplateId: "template_4tv7cqo", emailjsPublicKey: "SnbYUwrSp9PTDEPqs", comprasHabilitadas: true, adminPin: ADMIN_PIN_DEFAULT, staffPin: STAFF_PIN_DEFAULT, cloudinaryCloudName: "gf8xluii", cloudinaryUploadPreset: "pena4copas_comprobantes", telegramBotToken: "8882093865:AAG4e1kvfT6Wb_jl_3rejGvX6F7BAutL20k", telegramChatId: "1589109929", llaves: [{ id: "legacy", clave: "@NEQUIMIG29886", titular: "Miguel Rojas", qrUrl: "" }] });
       setReservas(r || []);
       setTickets(t || []);
       setCompras(c || []);
@@ -666,12 +693,16 @@ function BloquePagoManual({ config, codigo, pagado, pagoReportado, referenciaPag
         </ol>
       </div>
 
-      <div style={{ background: C.crema, borderRadius: 10, padding: 16 }}>
-        <p style={{ fontSize: 13, margin: 0, fontWeight: 700 }}>Transferí con tu llave Bre-B a:</p>
-        <p style={{ fontSize: 15, margin: "4px 0" }}>{config.llaveBreB} — {config.llaveTitular}</p>
-        <img src={qrBreB} alt="QR Bre-B" style={{ width: 160, margin: "8px auto 0", display: "block", borderRadius: 6 }} />
-        <p style={{ fontSize: 11, color: "#777", margin: "6px 0 0" }}>Desde cualquier banco, buscá "Bre-B" o "pagar con llave" en tu app.</p>
-      </div>
+      {(config.llaves?.length ? config.llaves : (config.llaveBreB ? [{ id: "legacy", clave: config.llaveBreB, titular: config.llaveTitular, qrUrl: "" }] : [])).map((llave, i) => (
+        <div key={llave.id || i} style={{ background: C.crema, borderRadius: 10, padding: 16 }}>
+          <p style={{ fontSize: 13, margin: 0, fontWeight: 700 }}>{i === 0 ? "Transferí con la llave Bre-B a:" : "O con esta otra llave Bre-B:"}</p>
+          <p style={{ fontSize: 15, margin: "4px 0" }}>{llave.clave} — {llave.titular}</p>
+          {(llave.qrUrl || llave.clave === "@NEQUIMIG29886") && (
+            <img src={llave.qrUrl || qrBreB} alt="QR Bre-B" style={{ width: 160, margin: "8px auto 0", display: "block", borderRadius: 6 }} />
+          )}
+          <p style={{ fontSize: 11, color: "#777", margin: "6px 0 0" }}>Desde cualquier banco, buscá "Bre-B" o "pagar con llave" en tu app.</p>
+        </div>
+      ))}
 
       {!pagoReportado && (
         <div style={{ background: "#fff", border: `2px dashed ${C.dorado}`, borderRadius: 10, padding: 14 }}>
@@ -1228,8 +1259,29 @@ function AdminPanel({ reservas, persistReservas, compras, persistCompras, gastos
   const [historiaEdit, setHistoriaEdit] = useState(nosotros.historia);
   const [cfgEdit, setCfgEdit] = useState(config);
   const [nuevoGasto, setNuevoGasto] = useState({ cantidad: 1, producto: "", valor: "", quienPago: "", seDebe: false });
+  const [nuevaLlave, setNuevaLlave] = useState({ clave: "", titular: "" });
+  const [archivoLlave, setArchivoLlave] = useState(null);
+  const [subiendoLlave, setSubiendoLlave] = useState(false);
 
   const ADMIN_PIN = config.adminPin || ADMIN_PIN_DEFAULT;
+  // Compatibilidad con la config vieja de una sola llave (llaveBreB/llaveTitular).
+  const llaves = cfgEdit.llaves?.length
+    ? cfgEdit.llaves
+    : (cfgEdit.llaveBreB ? [{ id: "legacy", clave: cfgEdit.llaveBreB, titular: cfgEdit.llaveTitular, qrUrl: "" }] : []);
+
+  const agregarLlave = async () => {
+    if (!nuevaLlave.clave.trim()) return;
+    setSubiendoLlave(true);
+    let qrUrl = "";
+    if (archivoLlave) qrUrl = await subirComprobante(config, archivoLlave);
+    const llave = { id: uid(), clave: nuevaLlave.clave.trim(), titular: nuevaLlave.titular.trim() || "Los 4 de Copas", qrUrl };
+    const next = { ...cfgEdit, llaves: [...llaves, llave] };
+    setCfgEdit(next);
+    await persistConfig(next);
+    setNuevaLlave({ clave: "", titular: "" });
+    setArchivoLlave(null);
+    setSubiendoLlave(false);
+  };
 
   if (!unlocked) {
     return (
@@ -1250,24 +1302,8 @@ function AdminPanel({ reservas, persistReservas, compras, persistCompras, gastos
     if (campo === "pagado") {
       const r = next.find((x) => x.id === id);
       if (r && r.pagado && r.email) {
-        const personas = `${r.personasTotal || 1} persona${(r.personasTotal || 1) === 1 ? "" : "s"}`;
-        const primerNombre = r.nombre.split(" ")[0];
-        enviarEmail(config, {
-          to_email: r.email,
-          to_name: r.nombre,
-          subject: "¡Confirmadísima tu reserva! — La Gran Peña Los 4 de Copas 🇦🇷",
-          message: `¡Aguante, ${primerNombre}! 🔥🇦🇷
-
-Tu lugar en La Gran Peña Los 4 de Copas quedó CONFIRMADO — ya podés ir guardando apetito, porque se viene una junta como Dios manda.
-
-🎟️ Código: ${r.id}
-👥 ${personas}
-💰 Saldo consumible: ${CURRENCY(r.total)} para gastar en productos el día del evento
-
-Te esperamos con el asado a punto, la carne jugosa cayendo de la parrilla, el fernet bien cargado y un río de anécdotas para contar por años. Folklore de fondo, buena gente alrededor y esa previa que ya sabemos cómo termina: entre amigos, sin mirar el reloj.
-
-Guardá bien tu código — lo vas a necesitar el día del evento para comprar tus productos con el saldo. ¡Nos vemos en la peña, que esta viene brava! 🥩🍷🎸`,
-        });
+        const { subject, message } = mensajeEmailReserva(r);
+        enviarEmail(config, { to_email: r.email, to_name: r.nombre, subject, message });
       }
       if (r && r.pagado && config.staffEmail) {
         enviarEmail(config, {
@@ -1278,6 +1314,18 @@ Guardá bien tu código — lo vas a necesitar el día del evento para comprar t
         });
       }
     }
+  };
+
+  const notificarEmail = (r) => {
+    if (!r.email) return;
+    const { subject, message } = mensajeEmailReserva(r);
+    enviarEmail(config, { to_email: r.email, to_name: r.nombre, subject, message });
+  };
+
+  const eliminarReserva = (id) => {
+    if (!window.confirm("¿Eliminar esta reserva? También se borran sus compras de productos asociadas. No se puede deshacer.")) return;
+    persistReservas(reservas.filter((r) => r.id !== id));
+    persistCompras(compras.filter((c) => c.reservaId !== id));
   };
 
   // Filas de la tabla "Compras del día del evento": una fila por producto vendido,
@@ -1351,18 +1399,6 @@ Guardá bien tu código — lo vas a necesitar el día del evento para comprar t
         <Stat label="Compras entregadas" value={compras.filter((c) => c.entregado).length} />
         <Stat label="Recaudado" value={CURRENCY(recaudadoReservas + recaudadoCompras)} />
       </div>
-
-      <Seccion titulo="⚙️ Configuración general" defaultOpen>
-        <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#333", fontSize: 13, marginBottom: 12 }}>
-          <input type="checkbox" checked={cfgEdit.comprasHabilitadas !== false} onChange={(e) => { const next = { ...cfgEdit, comprasHabilitadas: e.target.checked }; setCfgEdit(next); persistConfig(next); }} />
-          Compra de productos habilitada
-        </label>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <input value={cfgEdit.adminPin || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, adminPin: e.target.value })} style={inputStyle} placeholder="PIN de admin" />
-          <input value={cfgEdit.staffPin || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, staffPin: e.target.value })} style={inputStyle} placeholder="PIN de staff" />
-          <button onClick={() => persistConfig(cfgEdit)} style={btnGold}><Save size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Guardar</button>
-        </div>
-      </Seccion>
 
       <Seccion titulo="📊 Contabilidad" defaultOpen>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 10 }}>
@@ -1473,13 +1509,23 @@ Guardá bien tu código — lo vas a necesitar el día del evento para comprar t
                   )}
                 </div>
                 <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <button onClick={() => toggleReserva(r.id, "pagado")} style={pillBtn(r.pagado)}>Pagado</button>
+                  <button onClick={() => toggleReserva(r.id, "pagado")} style={pillBtn(r.pagado)}>{r.pagado ? "Pagado" : "Sin pagar"}</button>
                   {r.telefono && (
-                    <a href={linkWhatsApp(r)} target="_blank" rel="noopener noreferrer" title="Enviar confirmación por WhatsApp"
+                    <a href={linkWhatsApp(r)} target="_blank" rel="noopener noreferrer" title="Notificar por WhatsApp"
                       style={{ background: "#25D366", color: "#fff", border: "none", borderRadius: 20, padding: "6px 10px", display: "flex", alignItems: "center", textDecoration: "none" }}>
                       <Phone size={14} />
                     </a>
                   )}
+                  {r.email && (
+                    <button onClick={() => notificarEmail(r)} title="Notificar por correo"
+                      style={{ background: C.rojoOsc, color: "#fff", border: "none", borderRadius: 20, padding: "6px 10px", display: "flex", alignItems: "center", cursor: "pointer" }}>
+                      <Mail size={14} />
+                    </button>
+                  )}
+                  <button onClick={() => eliminarReserva(r.id)} title="Eliminar reserva"
+                    style={{ background: "#fff", color: "#a33", border: "1.5px solid #a33", borderRadius: 20, padding: "6px 10px", display: "flex", alignItems: "center", cursor: "pointer" }}>
+                    <Trash2 size={14} />
+                  </button>
                 </div>
               </div>
             );
@@ -1522,23 +1568,39 @@ Guardá bien tu código — lo vas a necesitar el día del evento para comprar t
         <button onClick={() => persistNosotros({ ...nosotros, historia: historiaEdit })} style={btnOutlineRojo}><Save size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Guardar historia</button>
       </Seccion>
 
-      <Seccion titulo="💵 Cuenta Nequi (pago manual)">
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <input value={cfgEdit.nequiCuenta} onChange={(e) => setCfgEdit({ ...cfgEdit, nequiCuenta: e.target.value })} style={inputStyle} placeholder="Número Nequi" />
-          <input value={cfgEdit.nequiTitular} onChange={(e) => setCfgEdit({ ...cfgEdit, nequiTitular: e.target.value })} style={inputStyle} placeholder="Titular" />
-          <button onClick={() => persistConfig(cfgEdit)} style={btnOutlineRojo}><Save size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Guardar</button>
-        </div>
-      </Seccion>
-
-      <Seccion titulo="🔑 Llave Bre-B (pago manual, cualquier banco)">
+      <Seccion titulo="🔑 Llaves Bre-B (pago manual, cualquier banco)">
         <p style={{ fontSize: 12, color: "#777", marginBottom: 8 }}>
-          La llave se crea gratis desde la app de tu banco (Bancolombia, Nequi, etc.) — sección Bre-B. Puede ser tu celular, NIT o una llave alfanumérica.
+          La llave se crea gratis desde la app de tu banco (Bancolombia, Nequi, etc.) — sección Bre-B. Puede ser tu celular, NIT o una llave alfanumérica. Podés cargar más de una (por ejemplo, una por cada organizador).
         </p>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <input value={cfgEdit.llaveBreB || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, llaveBreB: e.target.value })} style={inputStyle} placeholder="Llave Bre-B" />
-          <input value={cfgEdit.llaveTitular || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, llaveTitular: e.target.value })} style={inputStyle} placeholder="Titular" />
-          <button onClick={() => persistConfig(cfgEdit)} style={btnOutlineRojo}><Save size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Guardar</button>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
+          {llaves.map((llave) => (
+            <div key={llave.id} style={{ background: C.crema, borderRadius: 8, padding: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              {(llave.qrUrl || llave.clave === "@NEQUIMIG29886") && (
+                <img src={llave.qrUrl || qrBreB} alt="QR" style={{ width: 44, height: 44, borderRadius: 4, objectFit: "cover" }} />
+              )}
+              <div style={{ flex: 1, minWidth: 140 }}>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>{llave.clave}</div>
+                <div style={{ fontSize: 12, color: "#666" }}>{llave.titular}</div>
+              </div>
+              <button onClick={() => { const next = { ...cfgEdit, llaves: llaves.filter((l) => l.id !== llave.id) }; setCfgEdit(next); persistConfig(next); }} style={{ background: "none", border: "none", color: "#a33", cursor: "pointer" }}>
+                <Trash2 size={16} />
+              </button>
+            </div>
+          ))}
+          {llaves.length === 0 && <p style={{ fontSize: 12, color: "#999", margin: 0 }}>Todavía no cargaste ninguna llave.</p>}
         </div>
+        <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Agregar otra llave</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+          <input value={nuevaLlave.clave} onChange={(e) => setNuevaLlave({ ...nuevaLlave, clave: e.target.value })} style={inputStyle} placeholder="Llave Bre-B" />
+          <input value={nuevaLlave.titular} onChange={(e) => setNuevaLlave({ ...nuevaLlave, titular: e.target.value })} style={inputStyle} placeholder="Titular" />
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <input type="file" accept="image/*" onChange={(e) => setArchivoLlave(e.target.files?.[0] || null)} style={{ fontSize: 12 }} />
+          <button onClick={agregarLlave} disabled={subiendoLlave || !nuevaLlave.clave.trim()} style={{ ...btnOutlineRojo, opacity: subiendoLlave || !nuevaLlave.clave.trim() ? 0.6 : 1 }}>
+            {subiendoLlave ? "Subiendo…" : "Agregar llave"}
+          </button>
+        </div>
+        <p style={{ fontSize: 11, color: "#999", margin: "6px 0 0" }}>La foto del QR es opcional — si no la subís, se muestra solo el texto de la llave.</p>
       </Seccion>
 
       <Seccion titulo="✉️ Avisos por correo (EmailJS)">
@@ -1591,6 +1653,18 @@ Guardá bien tu código — lo vas a necesitar el día del evento para comprar t
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <input value={cfgEdit.wompiPublicKey || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, wompiPublicKey: e.target.value })} style={{ ...inputStyle, width: 260 }} placeholder="pub_prod_xxxxxxxx" />
           <button onClick={() => persistConfig(cfgEdit)} style={btnOutlineRojo}><Save size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Guardar</button>
+        </div>
+      </Seccion>
+
+      <Seccion titulo="⚙️ Configuración general">
+        <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#333", fontSize: 13, marginBottom: 12 }}>
+          <input type="checkbox" checked={cfgEdit.comprasHabilitadas !== false} onChange={(e) => { const next = { ...cfgEdit, comprasHabilitadas: e.target.checked }; setCfgEdit(next); persistConfig(next); }} />
+          Compra de productos habilitada
+        </label>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input value={cfgEdit.adminPin || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, adminPin: e.target.value })} style={inputStyle} placeholder="PIN de admin" />
+          <input value={cfgEdit.staffPin || ""} onChange={(e) => setCfgEdit({ ...cfgEdit, staffPin: e.target.value })} style={inputStyle} placeholder="PIN de staff" />
+          <button onClick={() => persistConfig(cfgEdit)} style={btnGold}><Save size={14} style={{ marginRight: 6, verticalAlign: -2 }} />Guardar</button>
         </div>
       </Seccion>
     </div>
