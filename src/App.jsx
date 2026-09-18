@@ -107,7 +107,9 @@ Te confirmamos tu reserva ✅
 💰 Total: ${CURRENCY(r.total)} (saldo consumible en productos)
 ✅ Pago confirmado
 
-Guardá tu código: lo vas a necesitar el día del evento para comprar productos con tu saldo. ¡Nos vemos en la peña! 🔥🥂`;
+Guardá tu código: lo vas a necesitar el día del evento para comprar productos con tu saldo. ¡Nos vemos en la peña! 🔥🥂
+
+📷 Tu código QR (mostralo el día del evento): ${qrCodeImageUrl(r.id)}`;
   }
   if (r.pagoReportado) {
     return `¡Hola ${nombre}! 👋 Somos de La Gran Peña Los 4 de Copas.
@@ -117,7 +119,9 @@ Recibimos tu comprobante de pago (ref. ${r.referenciaPago}) y lo estamos verific
 👥 ${personas}
 💰 Total: ${CURRENCY(r.total)}
 
-Te avisamos apenas quede confirmado. ¡Gracias por tu paciencia! 🙌`;
+Te avisamos apenas quede confirmado. ¡Gracias por tu paciencia! 🙌
+
+📷 Tu código QR: ${qrCodeImageUrl(r.id)}`;
   }
   return `¡Hola ${nombre}! 👋 Somos de La Gran Peña Los 4 de Copas.
 
@@ -127,7 +131,9 @@ Registramos tu reserva 📝
 💰 Total: ${CURRENCY(r.total)}
 ⏳ Todavía no vemos tu pago confirmado
 
-Para asegurar tu cupo, transferí usando el código ${r.id} como referencia y reportalo desde la web (o respondé este mensaje con el número de confirmación). ¡Cualquier duda, escribinos! 🙌`;
+Para asegurar tu cupo, transferí usando el código ${r.id} como referencia y reportalo desde la web (o respondé este mensaje con el número de confirmación). ¡Cualquier duda, escribinos! 🙌
+
+📷 Tu código QR: ${qrCodeImageUrl(r.id)}`;
 }
 
 /* Arma asunto + cuerpo del correo de confirmación para el cliente,
@@ -148,13 +154,19 @@ Tu lugar en La Gran Peña Los 4 de Copas quedó CONFIRMADO — ya podés ir guar
 
 Te esperamos con el asado a punto, la carne jugosa cayendo de la parrilla, el fernet bien cargado y un río de anécdotas para contar por años. Folklore de fondo, buena gente alrededor y esa previa que ya sabemos cómo termina: entre amigos, sin mirar el reloj.
 
-Guardá bien tu código — lo vas a necesitar el día del evento para comprar tus productos con el saldo. ¡Nos vemos en la peña, que esta viene brava! 🥩🍷🎸`,
+Guardá bien tu código — lo vas a necesitar el día del evento para comprar tus productos con el saldo. ¡Nos vemos en la peña, que esta viene brava! 🥩🍷🎸
+
+📷 Tu código QR (mostralo el día del evento): ${qrCodeImageUrl(r.id)}`,
     };
   }
   return {
     subject: "Tu reserva - La Gran Peña Los 4 de Copas",
-    message: `¡Hola ${primerNombre}! 👋 Te escribimos por tu reserva ${r.id} (${personas}, ${CURRENCY(r.total)}) en La Gran Peña Los 4 de Copas.\n${r.pagoReportado ? `Recibimos tu comprobante (ref. ${r.referenciaPago}) y lo estamos verificando.` : "Todavía no vemos tu pago confirmado — transferí usando el código como referencia y reportalo desde la web."}\n¡Cualquier duda, escribinos!`,
+    message: `¡Hola ${primerNombre}! 👋 Te escribimos por tu reserva ${r.id} (${personas}, ${CURRENCY(r.total)}) en La Gran Peña Los 4 de Copas.\n${r.pagoReportado ? `Recibimos tu comprobante (ref. ${r.referenciaPago}) y lo estamos verificando.` : "Todavía no vemos tu pago confirmado — transferí usando el código como referencia y reportalo desde la web."}\n¡Cualquier duda, escribinos!\n\n📷 Tu código QR: ${qrCodeImageUrl(r.id)}`,
   };
+}
+
+function qrCodeImageUrl(data) {
+  return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(data)}`;
 }
 
 function linkWhatsApp(r) {
@@ -235,13 +247,13 @@ async function storageSet(key, value) {
 
 /* Envía un correo vía EmailJS (directo desde el navegador, sin backend propio).
    Si la config todavía no tiene las 3 claves de EmailJS, no hace nada. */
-async function enviarEmail(config, { to_email, to_name, subject, message }) {
+async function enviarEmail(config, { to_email, to_name, subject, message, qr_url }) {
   const serviceId = config.emailjsServiceId || EMAILJS_SERVICE_ID_DEFAULT;
   const templateId = config.emailjsTemplateId || EMAILJS_TEMPLATE_ID_DEFAULT;
   const publicKey = config.emailjsPublicKey || EMAILJS_PUBLIC_KEY_DEFAULT;
   if (!serviceId || !templateId || !publicKey || !to_email) return false;
   try {
-    await emailjs.send(serviceId, templateId, { to_email, to_name, subject, message }, { publicKey });
+    await emailjs.send(serviceId, templateId, { to_email, to_name, subject, message, qr_url: qr_url || "" }, { publicKey });
     return true;
   } catch {
     return false;
@@ -666,7 +678,7 @@ function BloquePagoManual({ config, codigo, pagado, pagoReportado, referenciaPag
   const [archivo, setArchivo] = useState(null);
   const [reportando, setReportando] = useState(false);
   const [errorSubida, setErrorSubida] = useState("");
-  const [notificarPor, setNotificarPor] = useState("email");
+  const [notificarPor, setNotificarPor] = useState("whatsapp");
 
   if (pagado) return null;
 
@@ -726,10 +738,10 @@ function BloquePagoManual({ config, codigo, pagado, pagoReportado, referenciaPag
               <label style={{ fontSize: 12, fontWeight: 700, display: "block", marginBottom: 6 }}>¿Cómo preferís que te avisemos cuando se confirme?</label>
               <div style={{ display: "flex", gap: 14 }}>
                 <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-                  <input type="radio" name="notificarPor" checked={notificarPor === "email"} onChange={() => setNotificarPor("email")} /> 📧 Correo
+                  <input type="radio" name="notificarPor" checked={notificarPor === "whatsapp"} onChange={() => setNotificarPor("whatsapp")} /> 📲 WhatsApp
                 </label>
                 <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-                  <input type="radio" name="notificarPor" checked={notificarPor === "whatsapp"} onChange={() => setNotificarPor("whatsapp")} /> 📲 WhatsApp
+                  <input type="radio" name="notificarPor" checked={notificarPor === "email"} onChange={() => setNotificarPor("email")} /> 📧 Correo
                 </label>
               </div>
             </div>
@@ -768,13 +780,13 @@ function Reservas({ reservas, persistReservas, config }) {
      hasta que se reporte un pago (manual o Wompi). Así evitamos juntar
      reservas "fantasma" de gente que llena el formulario y nunca paga. */
   const confirmar = () => {
-    if (!nombre.trim()) return;
+    if (!nombre.trim() || !telefono.trim()) return;
     const code = uid();
     const nueva = {
       id: code, nombre: nombre.trim(), telefono: telefono.trim(), email: email.trim(),
       acompanantes: Math.max(0, Number(acompanantes) || 0), personasTotal,
       total: PRECIO_RESERVA, saldoConsumible: PRECIO_RESERVA, saldoUsado: 0,
-      pagado: false, pagoReportado: false, referenciaPago: "", comprobanteUrl: "", notificarPor: "email",
+      pagado: false, pagoReportado: false, referenciaPago: "", comprobanteUrl: "", notificarPor: "whatsapp",
       creado: new Date().toISOString(),
     };
     setConfirmado(nueva);
@@ -801,7 +813,7 @@ function Reservas({ reservas, persistReservas, config }) {
   };
 
   const reportarPago = async (ref, comprobanteUrl, notificarPor) => {
-    const actualizada = { ...confirmado, pagoReportado: true, referenciaPago: ref, comprobanteUrl: comprobanteUrl || "", notificarPor: notificarPor || "email" };
+    const actualizada = { ...confirmado, pagoReportado: true, referenciaPago: ref, comprobanteUrl: comprobanteUrl || "", notificarPor: notificarPor || "whatsapp" };
     const yaExiste = reservas.some((r) => r.id === confirmado.id);
     const next = yaExiste ? reservas.map((r) => (r.id === confirmado.id ? actualizada : r)) : [...reservas, actualizada];
     await persistReservas(next);
@@ -823,6 +835,7 @@ function Reservas({ reservas, persistReservas, config }) {
               {copiado ? <Check size={16} /> : <Copy size={16} />}
             </button>
           </div>
+          <img src={qrCodeImageUrl(confirmado.id)} alt="QR de la reserva" style={{ width: 180, height: 180, margin: "0 auto 10px", display: "block" }} />
           <p style={{ fontSize: 13, color: "#555", margin: "0 0 10px" }}>{confirmado.personasTotal} persona(s) en total (vos + {confirmado.acompanantes} acompañante{confirmado.acompanantes === 1 ? "" : "s"})</p>
           <div style={{ fontSize: 14, fontWeight: 800, color: C.rojoOsc, marginBottom: 10 }}>
             Total: {CURRENCY(confirmado.total)} — 100% consumible en productos el día del evento{" "}
@@ -881,7 +894,7 @@ function Reservas({ reservas, persistReservas, config }) {
         <div style={{ background: "#fff", padding: 22, display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{ position: "relative" }}>
             <User size={16} style={iconoInputStyle} />
-            <input placeholder="Tu nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} style={inputConIcono} />
+            <input placeholder="Tu nombre *" value={nombre} onChange={(e) => setNombre(e.target.value)} style={inputConIcono} />
           </div>
 
           <div>
@@ -900,15 +913,17 @@ function Reservas({ reservas, persistReservas, config }) {
 
           <div style={{ position: "relative" }}>
             <Phone size={16} style={iconoInputStyle} />
-            <input placeholder="WhatsApp" value={telefono} onChange={(e) => setTelefono(e.target.value)} style={inputConIcono} />
+            <input placeholder="WhatsApp *" value={telefono} onChange={(e) => setTelefono(e.target.value)} style={inputConIcono} />
           </div>
 
           <div style={{ position: "relative" }}>
             <Mail size={16} style={iconoInputStyle} />
-            <input placeholder="Correo (para confirmar tu reserva)" type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={inputConIcono} />
+            <input placeholder="Correo (opcional)" type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={inputConIcono} />
           </div>
 
-          <button onClick={confirmar} disabled={!nombre.trim()} style={{ ...btnGold, width: "100%", opacity: !nombre.trim() ? 0.5 : 1, padding: "14px 22px", fontSize: 15 }}>
+          <p style={{ fontSize: 11, color: "#999", margin: "-6px 0 0" }}>* Obligatorio — así te avisamos cuando se confirme el pago.</p>
+
+          <button onClick={confirmar} disabled={!nombre.trim() || !telefono.trim()} style={{ ...btnGold, width: "100%", opacity: !nombre.trim() || !telefono.trim() ? 0.5 : 1, padding: "14px 22px", fontSize: 15 }}>
             Dale, reservo — {CURRENCY(PRECIO_RESERVA)}
           </button>
         </div>
@@ -995,7 +1010,7 @@ function Comprar({ reservas, persistReservas, compras, persistCompras, config })
           <CheckCircle2 color={C.verde} size={40} />
           <h2 style={{ fontFamily: "'Alfa Slab One', serif", color: C.rojoOsc, fontSize: 22, margin: "10px 0" }}>¡Pedido a la parrilla!</h2>
           <p style={{ fontSize: 13, color: "#555" }}>Mostrale este código QR al staff en la barra o la parrilla y listo, a disfrutar.</p>
-          <img src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${confirmada.id}`} alt="QR del pedido" style={{ width: 200, height: 200, margin: "10px auto" }} />
+          <img src={qrCodeImageUrl(confirmada.id)} alt="QR del pedido" style={{ width: 200, height: 200, margin: "10px auto" }} />
           <div style={{ fontFamily: "monospace", fontSize: 18, letterSpacing: 2, marginBottom: 14 }}>{confirmada.id}</div>
 
           <div style={{ textAlign: "left", background: C.crema, borderRadius: 10, padding: 14, marginBottom: 14 }}>
@@ -1310,7 +1325,7 @@ function AdminPanel({ reservas, persistReservas, compras, persistCompras, gastos
         const prefiereWhatsapp = r.notificarPor === "whatsapp";
         if (!prefiereWhatsapp && r.email) {
           const { subject, message } = mensajeEmailReserva(r);
-          enviarEmail(config, { to_email: r.email, to_name: r.nombre, subject, message });
+          enviarEmail(config, { to_email: r.email, to_name: r.nombre, subject, message, qr_url: qrCodeImageUrl(r.id) });
         }
         if (config.staffEmail) {
           enviarEmail(config, {
@@ -1329,7 +1344,7 @@ function AdminPanel({ reservas, persistReservas, compras, persistCompras, gastos
   const notificarEmail = (r) => {
     if (!r.email) return;
     const { subject, message } = mensajeEmailReserva(r);
-    enviarEmail(config, { to_email: r.email, to_name: r.nombre, subject, message });
+    enviarEmail(config, { to_email: r.email, to_name: r.nombre, subject, message, qr_url: qrCodeImageUrl(r.id) });
   };
 
   const eliminarReserva = (id) => {
