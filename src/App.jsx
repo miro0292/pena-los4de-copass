@@ -661,11 +661,12 @@ const btnOutline = { background: "transparent", color: C.doradoClaro, border: `2
 /* ---------------------------------- RESERVAS ---------------------------------- */
 /* Bloque de pago manual reutilizado por la Reserva y por la Compra de productos.
    `onReportar(ref)` debe persistir la referencia en quien lo use (reserva o compra). */
-function BloquePagoManual({ config, codigo, pagado, pagoReportado, referenciaPago, comprobanteUrl, onReportar }) {
+function BloquePagoManual({ config, codigo, pagado, pagoReportado, referenciaPago, comprobanteUrl, pedirPreferencia, onReportar }) {
   const [referencia, setReferencia] = useState("");
   const [archivo, setArchivo] = useState(null);
   const [reportando, setReportando] = useState(false);
   const [errorSubida, setErrorSubida] = useState("");
+  const [notificarPor, setNotificarPor] = useState("email");
 
   if (pagado) return null;
 
@@ -678,7 +679,7 @@ function BloquePagoManual({ config, codigo, pagado, pagoReportado, referenciaPag
       urlComprobante = await subirComprobante(config, archivo);
       if (!urlComprobante) setErrorSubida("No se pudo subir la foto, pero igual guardamos tu referencia.");
     }
-    await onReportar(referencia.trim(), urlComprobante);
+    await onReportar(referencia.trim(), urlComprobante, notificarPor);
     setReportando(false);
   };
 
@@ -720,6 +721,19 @@ function BloquePagoManual({ config, codigo, pagado, pagoReportado, referenciaPag
             style={{ fontSize: 12, marginBottom: 8, width: "100%" }}
           />
           {archivo && <p style={{ fontSize: 11, color: C.verde, margin: "0 0 8px" }}>✓ {archivo.name}</p>}
+          {pedirPreferencia && (
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ fontSize: 12, fontWeight: 700, display: "block", marginBottom: 6 }}>¿Cómo preferís que te avisemos cuando se confirme?</label>
+              <div style={{ display: "flex", gap: 14 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                  <input type="radio" name="notificarPor" checked={notificarPor === "email"} onChange={() => setNotificarPor("email")} /> 📧 Correo
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                  <input type="radio" name="notificarPor" checked={notificarPor === "whatsapp"} onChange={() => setNotificarPor("whatsapp")} /> 📲 WhatsApp
+                </label>
+              </div>
+            </div>
+          )}
           <button onClick={enviar} disabled={reportando || !referencia.trim()} style={{ ...btnGold, width: "100%", opacity: reportando || !referencia.trim() ? 0.6 : 1 }}>
             {reportando ? (archivo ? "Subiendo foto…" : "Guardando…") : "Ya transferí"}
           </button>
@@ -750,16 +764,19 @@ function Reservas({ reservas, persistReservas, config }) {
 
   const personasTotal = 1 + Math.max(0, Number(acompanantes) || 0);
 
-  const confirmar = async () => {
+  /* La reserva NO se guarda en la base todavía: solo vive en el estado local
+     hasta que se reporte un pago (manual o Wompi). Así evitamos juntar
+     reservas "fantasma" de gente que llena el formulario y nunca paga. */
+  const confirmar = () => {
     if (!nombre.trim()) return;
     const code = uid();
     const nueva = {
       id: code, nombre: nombre.trim(), telefono: telefono.trim(), email: email.trim(),
       acompanantes: Math.max(0, Number(acompanantes) || 0), personasTotal,
       total: PRECIO_RESERVA, saldoConsumible: PRECIO_RESERVA, saldoUsado: 0,
-      pagado: false, pagoReportado: false, referenciaPago: "", creado: new Date().toISOString(),
+      pagado: false, pagoReportado: false, referenciaPago: "", comprobanteUrl: "", notificarPor: "email",
+      creado: new Date().toISOString(),
     };
-    await persistReservas([...reservas, nueva]);
     setConfirmado(nueva);
     setNombre(""); setAcompanantes(0); setTelefono(""); setEmail("");
   };
@@ -769,41 +786,28 @@ function Reservas({ reservas, persistReservas, config }) {
     pagarConWompi(confirmado, config, (estado, txId) => {
       setPagando(false);
       if (estado === "aprobado") {
-        const next = reservas.map((r) => (r.id === confirmado.id ? { ...r, pagado: true, wompiTransactionId: txId } : r));
-        persistReservas(next.length ? next : reservas);
-        setConfirmado((c) => ({ ...c, pagado: true }));
+        const actualizada = { ...confirmado, pagado: true, wompiTransactionId: txId };
+        const yaExiste = reservas.some((r) => r.id === confirmado.id);
+        const next = yaExiste ? reservas.map((r) => (r.id === confirmado.id ? actualizada : r)) : [...reservas, actualizada];
+        persistReservas(next);
+        setConfirmado(actualizada);
         setPagoMsg({ ok: true, texto: "¡Listo, quedaste adentro! Pago confirmado al toque." });
       } else if (estado === "rechazado") {
-        setPagoMsg({ ok: false, texto: "El pago no se aprobó, no te hagas drama. Podés reintentar o transferir manualmente por Nequi." });
+        setPagoMsg({ ok: false, texto: "El pago no se aprobó, no te hagas drama. Podés reintentar o transferir manualmente abajo." });
       } else {
-        setPagoMsg({ ok: false, texto: "No se pudo abrir el checkout de pagos. Tranqui, usá la transferencia manual por Nequi de abajo." });
+        setPagoMsg({ ok: false, texto: "No se pudo abrir el checkout de pagos. Tranqui, usá la transferencia manual de abajo." });
       }
     });
   };
 
-  const reportarPago = async (ref, comprobanteUrl) => {
-    const actualizada = { ...confirmado, pagoReportado: true, referenciaPago: ref, comprobanteUrl: comprobanteUrl || "" };
-    const next = reservas.map((r) => (r.id === confirmado.id ? actualizada : r));
+  const reportarPago = async (ref, comprobanteUrl, notificarPor) => {
+    const actualizada = { ...confirmado, pagoReportado: true, referenciaPago: ref, comprobanteUrl: comprobanteUrl || "", notificarPor: notificarPor || "email" };
+    const yaExiste = reservas.some((r) => r.id === confirmado.id);
+    const next = yaExiste ? reservas.map((r) => (r.id === confirmado.id ? actualizada : r)) : [...reservas, actualizada];
     await persistReservas(next);
     setConfirmado(actualizada);
 
-    if (config.staffEmail) {
-      enviarEmail(config, {
-        to_email: config.staffEmail,
-        to_name: "Staff",
-        subject: `Nuevo pago reportado - ${actualizada.id}`,
-        message: `${actualizada.nombre} (${actualizada.personasTotal} persona/s) reportó una transferencia para la reserva ${actualizada.id} (${CURRENCY(actualizada.total)}).\nReferencia: ${ref}${comprobanteUrl ? `\nComprobante: ${comprobanteUrl}` : ""}\nVerificalo en el panel de Admin contra el movimiento bancario.`,
-      });
-    }
-    enviarTelegram(config, `💸 Nuevo pago reportado\n${actualizada.nombre} — reserva ${actualizada.id}\nTotal: ${CURRENCY(actualizada.total)}\nReferencia: ${ref}${comprobanteUrl ? `\nComprobante: ${comprobanteUrl}` : " (sin foto)"}\n\nVerificalo en el panel de Admin.`);
-    if (actualizada.email) {
-      enviarEmail(config, {
-        to_email: actualizada.email,
-        to_name: actualizada.nombre,
-        subject: "¡Ya llegó tu comprobante! - La Gran Peña Los 4 de Copas",
-        message: `¡Hola ${actualizada.nombre.split(" ")[0]}! 👋 Recibimos la referencia de tu transferencia (${ref}) para la reserva ${actualizada.id}. Un organizador la va a verificar contra el movimiento bancario y te avisamos por acá apenas quede confirmada — no falta nada, ya estás a un pasito del asado, el fernet y la buena joda. ¡Gracias por tu paciencia!`,
-      });
-    }
+    enviarTelegram(config, `💸 Nuevo pago reportado\n${actualizada.nombre} — reserva ${actualizada.id}\nTotal: ${CURRENCY(actualizada.total)}\nReferencia: ${ref}${comprobanteUrl ? `\nComprobante: ${comprobanteUrl}` : " (sin foto)"}\nPrefiere que le avisen por: ${notificarPor === "whatsapp" ? "WhatsApp 📲" : "Correo 📧"}\n\nVerificalo en el panel de Admin.`);
   };
 
   if (confirmado) {
@@ -843,6 +847,7 @@ function Reservas({ reservas, persistReservas, config }) {
             config={config} codigo={confirmado.id}
             pagado={confirmado.pagado} pagoReportado={confirmado.pagoReportado} referenciaPago={confirmado.referenciaPago}
             comprobanteUrl={confirmado.comprobanteUrl}
+            pedirPreferencia
             onReportar={reportarPago}
           />
 
@@ -1301,17 +1306,22 @@ function AdminPanel({ reservas, persistReservas, compras, persistCompras, gastos
     persistReservas(next);
     if (campo === "pagado") {
       const r = next.find((x) => x.id === id);
-      if (r && r.pagado && r.email) {
-        const { subject, message } = mensajeEmailReserva(r);
-        enviarEmail(config, { to_email: r.email, to_name: r.nombre, subject, message });
-      }
-      if (r && r.pagado && config.staffEmail) {
-        enviarEmail(config, {
-          to_email: config.staffEmail,
-          to_name: "Admin",
-          subject: `Reserva confirmada - ${r.id}`,
-          message: `Confirmaste el pago de la reserva ${r.id} (${r.nombre}, ${r.personasTotal || 1} persona/s, ${CURRENCY(r.total)}).\n${r.email ? `Se le avisó por correo a ${r.email}.` : "No tenía correo cargado, no se le pudo avisar por mail."}`,
-        });
+      if (r && r.pagado) {
+        const prefiereWhatsapp = r.notificarPor === "whatsapp";
+        if (!prefiereWhatsapp && r.email) {
+          const { subject, message } = mensajeEmailReserva(r);
+          enviarEmail(config, { to_email: r.email, to_name: r.nombre, subject, message });
+        }
+        if (config.staffEmail) {
+          enviarEmail(config, {
+            to_email: config.staffEmail,
+            to_name: "Admin",
+            subject: `Reserva confirmada - ${r.id}`,
+            message: prefiereWhatsapp
+              ? `Confirmaste el pago de la reserva ${r.id} (${r.nombre}, ${r.personasTotal || 1} persona/s, ${CURRENCY(r.total)}).\n📲 Prefiere que le avisen por WhatsApp — acordate de tocarle el botón verde en la lista de reservas.`
+              : `Confirmaste el pago de la reserva ${r.id} (${r.nombre}, ${r.personasTotal || 1} persona/s, ${CURRENCY(r.total)}).\n${r.email ? `Se le avisó por correo a ${r.email}.` : "No tenía correo cargado, no se le pudo avisar por mail."}`,
+          });
+        }
       }
     }
   };
@@ -1505,6 +1515,7 @@ function AdminPanel({ reservas, persistReservas, compras, persistCompras, gastos
                   {pendienteVerificar && (
                     <div style={{ fontSize: 11, color: "#b8860b", marginTop: 4 }}>
                       ⏳ Reportó transferencia · ref. <b>{r.referenciaPago}</b>
+                      {r.notificarPor === "whatsapp" && <span> · prefiere aviso por 📲 WhatsApp</span>}
                     </div>
                   )}
                 </div>
